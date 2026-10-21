@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DoomsBlocker</string>
+    <string name="accessibility_service_description">DoomsBlocker monitors YouTube Shorts screen time to stop doomscrolling (5 min limit), enforces 30 min lockout, blocks selected games for your nephew after 20 mins, and blocks specified YouTube channels.</string>
+</resources>
