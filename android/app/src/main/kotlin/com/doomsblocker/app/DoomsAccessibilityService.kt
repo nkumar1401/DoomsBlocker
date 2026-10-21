@@ -1,6 +1,7 @@
 package com.doomsblocker.app
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -27,7 +28,11 @@ class DoomsAccessibilityService : AccessibilityService() {
         "com.google.android.youtube:id/reel_recycler",
         "com.google.android.youtube:id/reel_player_page_view",
         "com.google.android.youtube:id/shorts_player_view",
-        "com.google.android.youtube:id/reel_player_fragment"
+        "com.google.android.youtube:id/reel_player_fragment",
+        "com.google.android.youtube:id/shorts_container",
+        "com.google.android.youtube:id/reel_container",
+        "com.google.android.youtube:id/reel_recycler_view",
+        "com.google.android.youtube:id/shorts_view_pager"
     )
 
     private val channelNameViewIds = listOf(
@@ -68,10 +73,10 @@ class DoomsAccessibilityService : AccessibilityService() {
     }
 
     private fun handleYouTubeEvent(event: AccessibilityEvent) {
-        // 1. Strict Lockout Check: If YouTube is currently locked (30-min window), close it immediately!
+        // 1. Strict Lockout Check: If YouTube is currently locked, redirect to Home immediately!
         if (prefs.isYouTubeLocked) {
-            Log.d(TAG, "YouTube is in active 30-min lock window! Ejecting...")
-            performGlobalAction(GLOBAL_ACTION_HOME)
+            Log.d(TAG, "YouTube is in active lock window! Ejecting to home...")
+            ejectToHomeScreen()
             OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED)
             return
         }
@@ -104,13 +109,35 @@ class DoomsAccessibilityService : AccessibilityService() {
             }
         }
 
-        // Secondary match: Check buttons with contentDescription containing "Like this video" and "Remix"
+        // Secondary text match: Check buttons with "Remix" text
         val remixNodes = root.findAccessibilityNodeInfosByText("Remix")
         if (!remixNodes.isNullOrEmpty()) {
             remixNodes.forEach { it.recycle() }
             return true
         }
 
+        // Structural check for content descriptions
+        return hasShortsDescription(root, 0)
+    }
+
+    private fun hasShortsDescription(node: AccessibilityNodeInfo?, depth: Int): Boolean {
+        if (node == null || depth > 8) return false
+        val desc = node.contentDescription?.toString()
+        if (desc != null) {
+            if (desc.contains("Dislike this video", ignoreCase = true) ||
+                desc.contains("Remix this video", ignoreCase = true) ||
+                desc.equals("Shorts", ignoreCase = true)) {
+                return true
+            }
+        }
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            if (hasShortsDescription(child, depth + 1)) {
+                child?.recycle()
+                return true
+            }
+            child?.recycle()
+        }
         return false
     }
 
@@ -126,8 +153,8 @@ class DoomsAccessibilityService : AccessibilityService() {
                     if (!text.isNullOrEmpty()) {
                         for (blocked in blockedList) {
                             if (text.contains(blocked, ignoreCase = true)) {
-                                Log.w(TAG, "Blocked channel detected: $text! Ejecting...")
-                                performGlobalAction(GLOBAL_ACTION_HOME)
+                                Log.w(TAG, "Blocked channel detected: $text! Ejecting to home...")
+                                ejectToHomeScreen()
                                 OverlayLockActivity.start(
                                     this,
                                     OverlayLockActivity.REASON_CHANNEL_BLOCKED,
@@ -150,8 +177,8 @@ class DoomsAccessibilityService : AccessibilityService() {
         val usedSeconds = prefs.getAppUsageSeconds(pkgName)
 
         if (usedSeconds >= limitSeconds) {
-            Log.w(TAG, "App $pkgName reached limit of $limitMinutes mins! Ejecting...")
-            performGlobalAction(GLOBAL_ACTION_HOME)
+            Log.w(TAG, "App $pkgName reached limit of $limitMinutes mins! Ejecting to home...")
+            ejectToHomeScreen()
             OverlayLockActivity.start(this, OverlayLockActivity.REASON_GAME_LIMIT, getAppLabel(pkgName))
         }
     }
@@ -172,11 +199,12 @@ class DoomsAccessibilityService : AccessibilityService() {
             Log.d(TAG, "Shorts Active: $usedSec s / $limitSec s limit")
 
             if (usedSec >= limitSec) {
-                Log.w(TAG, "Shorts 5-minute limit hit! Enforcing 30-min YouTube Lockout!")
+                Log.w(TAG, "Shorts limit hit! Enforcing YouTube Lockout for ${prefs.shortsLockDurationMinutes} min!")
                 val lockDurationMillis = prefs.shortsLockDurationMinutes * 60 * 1000L
                 prefs.youtubeLockUntilTimestamp = now + lockDurationMillis
 
-                performGlobalAction(GLOBAL_ACTION_HOME)
+                // Forcefully redirect to phone Home Screen and display lock screen
+                ejectToHomeScreen()
                 OverlayLockActivity.start(this, OverlayLockActivity.REASON_SHORTS_LIMIT)
                 isInsideShorts = false
             }
@@ -192,9 +220,22 @@ class DoomsAccessibilityService : AccessibilityService() {
             Log.d(TAG, "Restricted App ($currentPkg) Active: $usedSec s / $limitSec s limit")
 
             if (usedSec >= limitSec) {
-                performGlobalAction(GLOBAL_ACTION_HOME)
+                ejectToHomeScreen()
                 OverlayLockActivity.start(this, OverlayLockActivity.REASON_GAME_LIMIT, getAppLabel(currentPkg))
             }
+        }
+    }
+
+    private fun ejectToHomeScreen() {
+        performGlobalAction(GLOBAL_ACTION_HOME)
+        try {
+            val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+            }
+            startActivity(homeIntent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error redirecting to home: ${e.message}")
         }
     }
 

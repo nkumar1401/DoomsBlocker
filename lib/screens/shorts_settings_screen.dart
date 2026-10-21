@@ -127,11 +127,30 @@ class _ShortsSettingsScreenState extends State<ShortsSettingsScreen> {
                         style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
                       ),
                       const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        children: [1, 2, 3, 5, 10].map((m) {
+                          final selected = _limitMinutes == m;
+                          return ChoiceChip(
+                            label: Text('$m min'),
+                            selected: selected,
+                            selectedColor: const Color(0xFFEF4444),
+                            backgroundColor: const Color(0xFF0F172A),
+                            labelStyle: TextStyle(
+                              color: selected ? Colors.white : const Color(0xFF94A3B8),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                            onSelected: (_) => setState(() => _limitMinutes = m),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 8),
                       Slider(
-                        value: _limitMinutes.toDouble(),
+                        value: _limitMinutes.toDouble().clamp(1.0, 30.0),
                         min: 1,
-                        max: 15,
-                        divisions: 14,
+                        max: 30,
+                        divisions: 29,
                         activeColor: const Color(0xFFEF4444),
                         inactiveColor: const Color(0xFF334155),
                         label: '$_limitMinutes min',
@@ -178,15 +197,34 @@ class _ShortsSettingsScreenState extends State<ShortsSettingsScreen> {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'How long YouTube remains strictly blocked once the limit is hit.',
+                        'Set any minute: how long YouTube remains strictly blocked once the limit is hit.',
                         style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
                       ),
                       const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        children: [1, 2, 5, 10, 15, 30, 60].map((m) {
+                          final selected = _lockDurationMinutes == m;
+                          return ChoiceChip(
+                            label: Text('$m min'),
+                            selected: selected,
+                            selectedColor: const Color(0xFF3B82F6),
+                            backgroundColor: const Color(0xFF0F172A),
+                            labelStyle: TextStyle(
+                              color: selected ? Colors.white : const Color(0xFF94A3B8),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                            onSelected: (_) => setState(() => _lockDurationMinutes = m),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 8),
                       Slider(
-                        value: _lockDurationMinutes.toDouble(),
-                        min: 15,
+                        value: _lockDurationMinutes.toDouble().clamp(1.0, 120.0),
+                        min: 1,
                         max: 120,
-                        divisions: 7,
+                        divisions: 119,
                         activeColor: const Color(0xFF3B82F6),
                         inactiveColor: const Color(0xFF334155),
                         label: '$_lockDurationMinutes min',
