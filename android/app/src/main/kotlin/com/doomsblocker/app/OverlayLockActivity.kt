@@ -38,6 +38,7 @@ class OverlayLockActivity : Activity() {
 
     private lateinit var tvTitle: TextView
     private lateinit var tvMessage: TextView
+    private lateinit var tvCountdownLabel: TextView
     private lateinit var tvCountdown: TextView
     private lateinit var btnGoHome: Button
     private lateinit var pinSection: LinearLayout
@@ -54,6 +55,7 @@ class OverlayLockActivity : Activity() {
 
         tvTitle = findViewById(R.id.tvLockTitle)
         tvMessage = findViewById(R.id.tvLockMessage)
+        tvCountdownLabel = findViewById(R.id.tvCountdownLabel)
         tvCountdown = findViewById(R.id.tvCountdown)
         btnGoHome = findViewById(R.id.btnGoHome)
         pinSection = findViewById(R.id.pinSection)
@@ -66,12 +68,7 @@ class OverlayLockActivity : Activity() {
         setupPinOverride()
 
         btnGoHome.setOnClickListener {
-            val homeIntent = Intent(Intent.ACTION_MAIN).apply {
-                addCategory(Intent.CATEGORY_HOME)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            startActivity(homeIntent)
-            finish()
+            goToHomeScreen()
         }
     }
 
@@ -86,27 +83,51 @@ class OverlayLockActivity : Activity() {
 
         when (reason) {
             REASON_SHORTS_LIMIT -> {
-                tvTitle.text = "YouTube Shorts Limit Reached"
-                tvMessage.text = "You scrolled Shorts for ${prefs.shortsLimitMinutes} minutes.\nYouTube is now locked for ${prefs.shortsLockDurationMinutes} minutes to avoid doomscrolling."
-                startLockdownTimer()
+                tvTitle.text = "YouTube Shorts Blocked"
+                tvMessage.text = "Shorts limit reached (${prefs.shortsLimitMinutes} min).\nShorts is locked for ${prefs.shortsLockDurationMinutes} min.\n(Long-form YouTube videos remain accessible)."
+                // Smooth 5-second auto-dismiss to Home Screen
+                startAutoDismissTimer(5)
             }
             REASON_YOUTUBE_LOCKED -> {
                 tvTitle.text = "YouTube is Locked"
-                tvMessage.text = "YouTube remains locked until the lock timer expires. Take a break!"
+                if (prefs.isNephewModeEnabled) {
+                    tvMessage.text = "Nephew Mode Active: Complete YouTube access is locked for ${prefs.shortsLockDurationMinutes} minutes."
+                } else {
+                    tvMessage.text = "YouTube access remains locked until timer expires. Take a break!"
+                }
+                tvCountdownLabel.text = "LOCKOUT TIME REMAINING"
                 startLockdownTimer()
             }
             REASON_GAME_LIMIT -> {
                 tvTitle.text = "Game Time Limit Reached"
                 val appLabel = if (blockedItem.isNotEmpty()) blockedItem else "Games"
-                tvMessage.text = "$appLabel reached the ${prefs.gameLimitMinutes}-minute daily combined limit under Nephew Mode."
-                tvCountdown.text = "LIMIT OVER"
+                tvMessage.text = "$appLabel reached the ${prefs.gameLimitMinutes}-minute daily limit under Nephew Mode."
+                startAutoDismissTimer(5)
             }
             REASON_CHANNEL_BLOCKED -> {
                 tvTitle.text = "Restricted YouTube Channel"
                 tvMessage.text = "The channel \"$blockedItem\" is blocked by your parental restriction rules."
-                tvCountdown.text = "BLOCKED"
+                startAutoDismissTimer(5)
             }
         }
+    }
+
+    private fun startAutoDismissTimer(seconds: Int) {
+        countDownTimer?.cancel()
+        tvCountdownLabel.text = "RETURNING TO HOME IN"
+        tvCountdown.text = "${seconds}s"
+
+        countDownTimer = object : CountDownTimer(seconds * 1000L, 1000) {
+            override fun onTick(millisUntilFinished: Long) {
+                val sec = (millisUntilFinished / 1000).toInt() + 1
+                tvCountdown.text = "${sec}s"
+            }
+
+            override fun onFinish() {
+                tvCountdown.text = "0s"
+                goToHomeScreen()
+            }
+        }.start()
     }
 
     private fun startLockdownTimer() {
@@ -156,14 +177,18 @@ class OverlayLockActivity : Activity() {
         }
     }
 
-    override fun onBackPressed() {
-        // Prevent bypassing the lock screen by pressing back. Redirect home instead.
+    private fun goToHomeScreen() {
+        countDownTimer?.cancel()
         val homeIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_HOME)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
         }
         startActivity(homeIntent)
         finish()
+    }
+
+    override fun onBackPressed() {
+        goToHomeScreen()
     }
 
     override fun onDestroy() {

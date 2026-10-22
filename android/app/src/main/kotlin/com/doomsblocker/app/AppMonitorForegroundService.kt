@@ -71,12 +71,15 @@ class AppMonitorForegroundService : Service() {
 
         val fgPackage = getForegroundPackage(now) ?: return
 
-        // 1. YouTube 30-minute lock check
+        // 1. YouTube lock check
         if (fgPackage == "com.google.android.youtube" && prefs.isYouTubeLocked) {
-            Log.w(TAG, "YouTube opened during active lock window! Ejecting...")
-            ejectToHome()
-            OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED)
-            return
+            if (prefs.isNephewModeEnabled) {
+                Log.w(TAG, "Nephew Mode active: YouTube opened during active lock window! Ejecting...")
+                ejectToHome()
+                OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED)
+                return
+            }
+            // In Adult Mode, normal YouTube app & longform video are permitted; Shorts is strictly blocked by AccessibilityService!
         }
 
         // 2. Nephew Mode restricted games check
@@ -115,9 +118,24 @@ class AppMonitorForegroundService : Service() {
     }
 
     private fun ejectToHome() {
+        try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+            audioManager?.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MEDIA_PAUSE))
+            audioManager?.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_MEDIA_PAUSE))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error pausing audio: ${e.message}")
+        }
+
+        try {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            am?.killBackgroundProcesses("com.google.android.youtube")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error killing background YouTube process: ${e.message}")
+        }
+
         val homeIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_HOME)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
         }
         startActivity(homeIntent)
     }
