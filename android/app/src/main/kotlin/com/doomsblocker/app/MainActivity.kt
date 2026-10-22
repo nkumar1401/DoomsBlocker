@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
+import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -135,6 +136,13 @@ class MainActivity : FlutterActivity() {
                     val pin = call.argument<String>("pin") ?: ""
                     if (pin == prefs.parentPin) {
                         prefs.unlockYouTubeEmergency()
+                        try {
+                            val dismissIntent = Intent("com.doomsblocker.ACTION_DISMISS_OVERLAY")
+                            dismissIntent.setPackage(packageName)
+                            sendBroadcast(dismissIntent)
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Error sending dismiss overlay broadcast: ${e.message}")
+                        }
                         result.success(true)
                     } else {
                         result.success(false)

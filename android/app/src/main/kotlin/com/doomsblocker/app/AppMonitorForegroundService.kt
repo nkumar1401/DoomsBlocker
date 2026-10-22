@@ -9,12 +9,14 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import java.util.Locale
 
 class AppMonitorForegroundService : Service() {
 
@@ -39,12 +41,16 @@ class AppMonitorForegroundService : Service() {
     }
 
     private lateinit var prefs: AppPreferences
+    private lateinit var notificationManager: NotificationManager
     private val handler = Handler(Looper.getMainLooper())
     private var lastCheckTime = System.currentTimeMillis()
+    private var lastNotifTimeSec = -1
+    private var lastNotifLocked = false
 
     private val monitorRunnable = object : Runnable {
         override fun run() {
             checkForegroundAppAndEnforceRules()
+            updateNotificationDynamic()
             handler.postDelayed(this, 1000)
         }
     }
@@ -52,10 +58,30 @@ class AppMonitorForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         prefs = AppPreferences(applicationContext)
+        notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
         lastCheckTime = System.currentTimeMillis()
         handler.post(monitorRunnable)
+    }
+
+    private fun updateNotificationDynamic() {
+        val isLocked = prefs.isYouTubeLocked
+        val remainingSec = if (isLocked) {
+            ((prefs.youtubeLockUntilTimestamp - System.currentTimeMillis()) / 1000).toInt().coerceAtLeast(0)
+        } else {
+            prefs.shortsUsedSecondsToday
+        }
+
+        if (isLocked != lastNotifLocked || remainingSec != lastNotifTimeSec) {
+            lastNotifLocked = isLocked
+            lastNotifTimeSec = remainingSec
+            try {
+                notificationManager.notify(NOTIFICATION_ID, buildNotification())
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating notification: ${e.message}")
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -174,14 +200,61 @@ class AppMonitorForegroundService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("DoomsBlocker Guard Active")
-            .setContentText("Shorts limit (2m) & Nephew mode active")
+        val isLocked = prefs.isYouTubeLocked
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+
+        if (isLocked) {
+            val remainingMillis = prefs.youtubeLockUntilTimestamp - System.currentTimeMillis()
+            val remainingSec = (remainingMillis / 1000).toInt().coerceAtLeast(0)
+            val minutes = remainingSec / 60
+            val seconds = remainingSec % 60
+            val timeFormatted = String.format(Locale.US, "%02d:%02d", minutes, seconds)
+            val totalLockoutSec = prefs.shortsLockDurationMinutes * 60
+
+            val unlockIntent = Intent(this, OverlayLockActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(OverlayLockActivity.EXTRA_REASON, OverlayLockActivity.REASON_YOUTUBE_LOCKED)
+            }
+            val unlockPendingIntent = PendingIntent.getActivity(
+                this,
+                1,
+                unlockIntent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+
+            builder
+                .setContentTitle("YouTube Shorts Locked • $timeFormatted remaining")
+                .setContentText("Locked for ${prefs.shortsLockDurationMinutes}m after reaching limit")
+                .setProgress(totalLockoutSec, remainingSec, false)
+                .setColor(Color.parseColor("#EF4444"))
+                .addAction(android.R.drawable.ic_lock_idle_lock, "PIN Override", unlockPendingIntent)
+                .addAction(android.R.drawable.ic_menu_preferences, "Open App", pendingIntent)
+        } else {
+            val usedSec = prefs.shortsUsedSecondsToday
+            val limitSec = prefs.shortsLimitMinutes * 60
+            val usedFormatted = String.format(Locale.US, "%02d:%02d", usedSec / 60, usedSec % 60)
+            val limitFormatted = String.format(Locale.US, "%02d:%02d", limitSec / 60, limitSec % 60)
+
+            val modeText = if (prefs.isNephewModeEnabled) {
+                "Nephew Guard ON • Strict child protection active"
+            } else {
+                "Adult Mode • Shorts restricted to ${prefs.shortsLimitMinutes} min"
+            }
+
+            builder
+                .setContentTitle("DoomsBlocker Active • Shorts: $usedFormatted / $limitFormatted")
+                .setContentText(modeText)
+                .setProgress(limitSec, usedSec, false)
+                .setColor(Color.parseColor("#06B6D4"))
+                .addAction(android.R.drawable.ic_menu_preferences, "Dashboard", pendingIntent)
+        }
+
+        return builder.build()
     }
 
     override fun onDestroy() {

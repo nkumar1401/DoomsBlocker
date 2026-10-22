@@ -1,8 +1,11 @@
 package com.doomsblocker.app
 
 import android.app.Activity
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.view.View
@@ -47,11 +50,24 @@ class OverlayLockActivity : Activity() {
     private lateinit var etPin: EditText
     private lateinit var btnUnlockPin: Button
 
+    private val dismissReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            finish()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_overlay_lock)
 
         prefs = AppPreferences(this)
+
+        val filter = IntentFilter("com.doomsblocker.ACTION_DISMISS_OVERLAY")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(dismissReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(dismissReceiver, filter)
+        }
 
         tvTitle = findViewById(R.id.tvLockTitle)
         tvMessage = findViewById(R.id.tvLockMessage)
@@ -69,6 +85,16 @@ class OverlayLockActivity : Activity() {
 
         btnGoHome.setOnClickListener {
             goToHomeScreen()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!prefs.isYouTubeLocked) {
+            val reason = intent?.getStringExtra(EXTRA_REASON)
+            if (reason == REASON_YOUTUBE_LOCKED || reason == REASON_SHORTS_LIMIT) {
+                finish()
+            }
         }
     }
 
@@ -193,6 +219,11 @@ class OverlayLockActivity : Activity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            unregisterReceiver(dismissReceiver)
+        } catch (e: Exception) {
+            // ignore
+        }
         countDownTimer?.cancel()
     }
 }

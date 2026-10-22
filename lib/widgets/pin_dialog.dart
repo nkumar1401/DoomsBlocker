@@ -4,11 +4,13 @@ import '../services/native_bridge.dart';
 class PinDialog extends StatefulWidget {
   final String title;
   final String description;
+  final bool returnPin;
 
   const PinDialog({
     Key? key,
     this.title = 'Enter Parent PIN',
     this.description = 'Enter your 4-digit PIN to modify parental restrictions.',
+    this.returnPin = false,
   }) : super(key: key);
 
   static Future<bool> show(
@@ -16,12 +18,25 @@ class PinDialog extends StatefulWidget {
     String title = 'Enter Parent PIN',
     String description = 'Enter your 4-digit PIN to modify parental restrictions.',
   }) async {
-    final result = await showDialog<bool>(
+    final result = await showDialog<dynamic>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => PinDialog(title: title, description: description),
+      builder: (ctx) => PinDialog(title: title, description: description, returnPin: false),
     );
-    return result ?? false;
+    return result == true;
+  }
+
+  static Future<String?> showAndGetPin(
+    BuildContext context, {
+    String title = 'Enter Parent PIN',
+    String description = 'Enter your 4-digit PIN to modify parental restrictions.',
+  }) async {
+    final result = await showDialog<dynamic>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PinDialog(title: title, description: description, returnPin: true),
+    );
+    return (result is String) ? result : null;
   }
 
   @override
@@ -50,7 +65,7 @@ class _PinDialogState extends State<PinDialog> {
     if (mounted) {
       setState(() => _isLoading = false);
       if (valid) {
-        Navigator.of(context).pop(true);
+        Navigator.of(context).pop(widget.returnPin ? pin : true);
       } else {
         setState(() => _hasError = true);
       }
@@ -118,7 +133,7 @@ class _PinDialogState extends State<PinDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
+          onPressed: () => Navigator.of(context).pop(widget.returnPin ? null : false),
           child: const Text('Cancel', style: TextStyle(color: Color(0xFF94A3B8))),
         ),
         ElevatedButton(
