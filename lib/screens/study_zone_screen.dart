@@ -1,6 +1,11 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/dashboard_data.dart';
 import '../services/native_bridge.dart';
 import 'qr_scanner_screen.dart';
@@ -18,6 +23,9 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
   bool _isLoading = true;
   Timer? _ticker;
   int _localRemainingSeconds = 0;
+
+  final GlobalKey _entrancePosterKey = GlobalKey();
+  final GlobalKey _exitPosterKey = GlobalKey();
 
   // Selected duration for check-in
   int _selectedDurationMinutes = 60;
@@ -855,130 +863,201 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
 
           // Poster 1: Entrance Check-In
           _buildPrintablePosterCard(
+            repaintKey: _entrancePosterKey,
             title: '1. Entrance Poster (Check-In)',
             badgeText: 'PRINT FOR ENTRANCE & DESKS',
             badgeColor: const Color(0xFF06B6D4),
             qrData: entrancePayload,
             instructions: 'Students scan this QR to choose study duration & lock distraction.',
             footerNote: 'Encodes: $entrancePayload',
+            onShare: () => _sharePoster(_entrancePosterKey, 'Entrance_CheckIn'),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 28),
 
           // Poster 2: Exit Checkout
           _buildPrintablePosterCard(
+            repaintKey: _exitPosterKey,
             title: '2. Exit Poster (Checkout)',
             badgeText: 'PRINT FOR FRONT DESK EXIT',
             badgeColor: const Color(0xFF10B981),
             qrData: exitPayload,
             instructions: 'Students scan this QR when leaving early to release the lock.',
             footerNote: 'Encodes: $exitPayload',
+            onShare: () => _sharePoster(_exitPosterKey, 'Exit_Checkout'),
           ),
+          const SizedBox(height: 24),
         ],
       ),
     );
   }
 
+  Future<void> _sharePoster(GlobalKey key, String name) async {
+    try {
+      final boundary = key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+      final pngBytes = byteData.buffer.asUint8List();
+
+      final tempDir = await getTemporaryDirectory();
+      final sanitized = name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_').toLowerCase();
+      final file = File('${tempDir.path}/doomsblocker_${sanitized}_poster.png');
+      await file.writeAsBytes(pngBytes);
+
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: '📚 DoomsBlocker $name Poster for $_customLibraryName\nPrint this high-resolution QR poster for your study desk.',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not share poster: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildPrintablePosterCard({
+    required GlobalKey repaintKey,
     required String title,
     required String badgeText,
     required Color badgeColor,
     required String qrData,
     required String instructions,
     required String footerNote,
+    required VoidCallback onShare,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(22),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    return Column(
+      children: [
+        RepaintBoundary(
+          key: repaintKey,
+          child: Container(
             decoration: BoxDecoration(
-              color: badgeColor.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(8),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 15,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-            child: Text(
-              badgeText,
-              style: TextStyle(
-                color: badgeColor,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            style: const TextStyle(
-              color: Color(0xFF0F172A),
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _customLibraryName,
-            style: const TextStyle(color: Color(0xFF475569), fontSize: 13),
-          ),
-          const SizedBox(height: 16),
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: badgeColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    badgeText,
+                    style: TextStyle(
+                      color: badgeColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFF0F172A),
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _customLibraryName,
+                  style: const TextStyle(color: Color(0xFF475569), fontSize: 13),
+                ),
+                const SizedBox(height: 16),
 
-          // White QR container with high contrast
-          Center(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
-              ),
-              child: QrImageView(
-                data: qrData,
-                version: QrVersions.auto,
-                size: 190.0,
-                backgroundColor: Colors.white,
-                eyeStyle: const QrEyeStyle(
-                  eyeShape: QrEyeShape.square,
-                  color: Colors.black,
+                // White QR container with high contrast
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
+                    ),
+                    child: QrImageView(
+                      data: qrData,
+                      version: QrVersions.auto,
+                      size: 190.0,
+                      backgroundColor: Colors.white,
+                      eyeStyle: const QrEyeStyle(
+                        eyeShape: QrEyeShape.square,
+                        color: Colors.black,
+                      ),
+                      dataModuleStyle: const QrDataModuleStyle(
+                        dataModuleShape: QrDataModuleShape.square,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ),
                 ),
-                dataModuleStyle: const QrDataModuleStyle(
-                  dataModuleShape: QrDataModuleShape.square,
-                  color: Colors.black,
+                const SizedBox(height: 14),
+                Text(
+                  instructions,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xFF334155),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
+                const SizedBox(height: 6),
+                Text(
+                  footerNote,
+                  style: const TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontSize: 10,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Share & Print Actions
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1E293B),
+              foregroundColor: Colors.white,
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: badgeColor.withOpacity(0.4)),
               ),
             ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            instructions,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFF334155),
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+            icon: Icon(Icons.share_rounded, size: 18, color: badgeColor),
+            label: Text(
+              'Share via WhatsApp / Email to Print',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Colors.white.withOpacity(0.9),
+              ),
             ),
+            onPressed: onShare,
           ),
-          const SizedBox(height: 6),
-          Text(
-            footerNote,
-            style: const TextStyle(
-              color: Color(0xFF94A3B8),
-              fontSize: 10,
-              fontFamily: 'monospace',
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
