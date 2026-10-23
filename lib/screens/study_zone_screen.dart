@@ -88,15 +88,97 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
     );
 
     if (result != null && mounted) {
-      if (result.type == StudyScanType.checkIn || result.type == StudyScanType.unknown) {
-        _showGoalPickerSheet(result.zoneName);
-      } else if (result.type == StudyScanType.checkOut) {
-        _handleScanExit(result.zoneName);
+      if (_data.isStudyZoneActive) {
+        _showAlreadyCheckedInDialog(result.zoneName);
+        return;
       }
+
+      if (result.type == StudyScanType.checkOut) {
+        _showNotCheckedInWarningDialog(result.zoneName);
+        return;
+      }
+
+      _showGoalPickerSheet(result.zoneName);
     }
   }
 
+  void _showNotCheckedInWarningDialog(String zoneName) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B), size: 26),
+            SizedBox(width: 10),
+            Text('Not Checked In', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'You scanned an Exit / Checkout poster, but you are not checked into $zoneName yet!\n\nPlease scan the Library Entrance poster first to start your study session.',
+          style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF06B6D4),
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _handleScanEntrance();
+            },
+            child: const Text('Scan Entrance Poster', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAlreadyCheckedInDialog(String zoneName) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Color(0xFF06B6D4), size: 26),
+            SizedBox(width: 10),
+            Text('Already Checked In', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'You are already checked in to ${_data.studyZoneName.isNotEmpty ? _data.studyZoneName : zoneName}!\n\nYour focused study session is currently active. To finish and release the distraction lock, scan the Exit QR poster at the desk.',
+          style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF06B6D4),
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Got it', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _handleScanExit([String? zone]) async {
+    if (!_data.isStudyZoneActive) {
+      _showNotCheckedInWarningDialog(zone ?? 'the library');
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(

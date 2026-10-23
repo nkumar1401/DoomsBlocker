@@ -62,6 +62,7 @@ class OverlayLockActivity : Activity() {
     private lateinit var btnCloseOverlay: TextView
     private var failedPinAttempts = 0
     private var targetPackage: String? = null
+    private var activityCreationTimeMillis = 0L
 
     private val dismissReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -71,6 +72,7 @@ class OverlayLockActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        activityCreationTimeMillis = System.currentTimeMillis()
         setContentView(R.layout.activity_overlay_lock)
 
         prefs = AppPreferences(this)
@@ -301,6 +303,10 @@ class OverlayLockActivity : Activity() {
     }
 
     override fun onBackPressed() {
+        // Prevent stray accessibility back-actions from instantly dismissing the 5s popup screen
+        if (System.currentTimeMillis() - activityCreationTimeMillis < 1500L) {
+            return
+        }
         goToHomeScreen()
     }
 

@@ -26,6 +26,26 @@ class DoomsAccessibilityService : AccessibilityService() {
     private var activePackage: String? = null
     private var isInsideShorts = false
     private var lastActiveTimeMillis = 0L
+    private var lastLockActionTimeMillis = 0L
+
+    private fun canTriggerLockAction(): Boolean {
+        val now = System.currentTimeMillis()
+        if (now - lastLockActionTimeMillis < 2500L) {
+            return false
+        }
+        lastLockActionTimeMillis = now
+        return true
+    }
+
+    private fun pauseMediaPlayback() {
+        try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            audioManager?.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PAUSE))
+            audioManager?.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PAUSE))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error pausing audio: ${e.message}")
+        }
+    }
 
     // Dedicated YouTube Shorts View & Layout IDs
     private val shortsViewIds = listOf(
@@ -101,8 +121,9 @@ class DoomsAccessibilityService : AccessibilityService() {
                 try {
                     val inShortsNow = detectShortsPresence(rootNode)
                     if (inShortsNow) {
-                        Log.d(TAG, "Study Zone Active: Shorts blocked! Exiting...")
-                        exitShortsPlayer()
+                        if (!canTriggerLockAction()) return
+                        Log.d(TAG, "Study Zone Active: Shorts blocked! Showing smooth 5s lock overlay...")
+                        pauseMediaPlayback()
                         OverlayLockActivity.start(this, OverlayLockActivity.REASON_STUDY_ZONE, prefs.studyZoneName, YOUTUBE_PACKAGE)
                         return
                     }
@@ -116,8 +137,9 @@ class DoomsAccessibilityService : AccessibilityService() {
         if (prefs.isYouTubeLocked) {
             if (prefs.isNephewModeEnabled) {
                 // Nephew Mode: Lock ENTIRE YouTube application
-                Log.d(TAG, "Nephew Mode active & YouTube locked! Ejecting to home...")
-                ejectToHomeScreen(YOUTUBE_PACKAGE)
+                if (!canTriggerLockAction()) return
+                Log.d(TAG, "Nephew Mode active & YouTube locked! Showing lock overlay...")
+                pauseMediaPlayback()
                 OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = YOUTUBE_PACKAGE)
                 return
             } else {
@@ -127,8 +149,9 @@ class DoomsAccessibilityService : AccessibilityService() {
                     try {
                         val inShortsNow = detectShortsPresence(rootNode)
                         if (inShortsNow) {
-                            Log.d(TAG, "Adult Mode: Shorts is in lock window! Exiting Shorts...")
-                            exitShortsPlayer()
+                            if (!canTriggerLockAction()) return
+                            Log.d(TAG, "Adult Mode: Shorts is in lock window! Showing smooth lock overlay...")
+                            pauseMediaPlayback()
                             OverlayLockActivity.start(this, OverlayLockActivity.REASON_SHORTS_LIMIT, targetPackage = YOUTUBE_PACKAGE)
                             return
                         }
@@ -317,17 +340,17 @@ class DoomsAccessibilityService : AccessibilityService() {
             Log.d(TAG, "Shorts Active: $usedSec s / $limitSec s limit (Limit: ${prefs.shortsLimitMinutes} min)")
 
             if (usedSec >= limitSec) {
+                if (!canTriggerLockAction()) return
                 Log.w(TAG, "Shorts limit hit ($usedSec >= $limitSec s)! Enforcing Lockout for ${prefs.shortsLockDurationMinutes} min!")
                 val lockDurationMillis = prefs.shortsLockDurationMinutes * 60 * 1000L
                 prefs.youtubeLockUntilTimestamp = now + lockDurationMillis
 
+                pauseMediaPlayback()
                 if (prefs.isNephewModeEnabled) {
                     // In Nephew Mode: Lock ENTIRE YouTube application
-                    ejectToHomeScreen(YOUTUBE_PACKAGE)
                     OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = YOUTUBE_PACKAGE)
                 } else {
-                    // In Adult Mode: Only exit Shorts! Allow longform videos
-                    exitShortsPlayer()
+                    // In Adult Mode: Only exit Shorts with smooth overlay
                     OverlayLockActivity.start(this, OverlayLockActivity.REASON_SHORTS_LIMIT, targetPackage = YOUTUBE_PACKAGE)
                 }
                 isInsideShorts = false
