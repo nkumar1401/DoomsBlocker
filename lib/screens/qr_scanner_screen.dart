@@ -157,35 +157,17 @@ class _QrScannerScreenState extends State<QrScannerScreen>
               final left = (size.width - scanBoxSize) / 2;
               final top = (size.height - scanBoxSize) / 2 - 20;
 
+              final scanRect = Rect.fromLTWH(left, top, scanBoxSize, scanBoxSize);
+
               return Stack(
                 children: [
-                  // Translucent dark mask
-                  ColorFiltered(
-                    colorFilter: ColorFilter.mode(
-                      Colors.black.withOpacity(0.65),
-                      BlendMode.srcOut,
-                    ),
-                    child: Stack(
-                      children: [
-                        Container(
-                          decoration: const BoxDecoration(
-                            color: Colors.black,
-                            backgroundBlendMode: BlendMode.dstOut,
-                          ),
-                        ),
-                        Align(
-                          alignment: Alignment.center,
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 40),
-                            width: scanBoxSize,
-                            height: scanBoxSize,
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                          ),
-                        ),
-                      ],
+                  // Clean dark translucent overlay with transparent cutout window (Industry Standard)
+                  CustomPaint(
+                    size: size,
+                    painter: _ScannerOverlayPainter(
+                      scanRect: scanRect,
+                      borderRadius: 24,
+                      overlayColor: Colors.black.withOpacity(0.65),
                     ),
                   ),
 
@@ -423,5 +405,52 @@ class _CornerReticle extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Industry standard scanner overlay with hardware-accelerated transparent cutout
+class _ScannerOverlayPainter extends CustomPainter {
+  final Rect scanRect;
+  final double borderRadius;
+  final Color overlayColor;
+
+  const _ScannerOverlayPainter({
+    required this.scanRect,
+    this.borderRadius = 24.0,
+    required this.overlayColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final backgroundPath = Path()
+      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
+
+    final cutoutPath = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          scanRect,
+          Radius.circular(borderRadius),
+        ),
+      );
+
+    // Punch out the camera window using difference operation
+    final finalPath = Path.combine(
+      PathOperation.difference,
+      backgroundPath,
+      cutoutPath,
+    );
+
+    final paint = Paint()
+      ..color = overlayColor
+      ..style = PaintingStyle.fill;
+
+    canvas.drawPath(finalPath, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScannerOverlayPainter oldDelegate) {
+    return oldDelegate.scanRect != scanRect ||
+        oldDelegate.borderRadius != borderRadius ||
+        oldDelegate.overlayColor != overlayColor;
   }
 }
