@@ -24,6 +24,10 @@ class AppPreferences(context: Context) {
         private const val KEY_RESTRICTED_APPS = "restricted_apps"
         private const val KEY_APP_USAGE_SECONDS = "app_usage_seconds"
         private const val KEY_BLOCKED_CHANNELS = "blocked_channels"
+        private const val KEY_STUDY_ZONE_ACTIVE = "study_zone_active"
+        private const val KEY_STUDY_ZONE_NAME = "study_zone_name"
+        private const val KEY_STUDY_ZONE_START = "study_zone_start"
+        private const val KEY_STUDY_ZONE_EXPIRE = "study_zone_expire"
     }
 
     init {
@@ -55,7 +59,7 @@ class AppPreferences(context: Context) {
         set(value) = prefs.edit().putLong(KEY_YT_LOCK_UNTIL, value).apply()
 
     val isYouTubeLocked: Boolean
-        get() = System.currentTimeMillis() < youtubeLockUntilTimestamp
+        get() = isStudyZoneActive || (System.currentTimeMillis() < youtubeLockUntilTimestamp)
 
     var shortsUsedSecondsToday: Int
         get() {
@@ -134,5 +138,53 @@ class AppPreferences(context: Context) {
 
     fun resetGamesUsageEmergency() {
         prefs.edit().putString(KEY_APP_USAGE_SECONDS, "{}").apply()
+    }
+
+    var isStudyZoneActive: Boolean
+        get() {
+            if (!prefs.getBoolean(KEY_STUDY_ZONE_ACTIVE, false)) return false
+            val expire = studyZoneExpireTimestamp
+            if (expire > 0 && System.currentTimeMillis() >= expire) {
+                endStudyZoneSession()
+                return false
+            }
+            return true
+        }
+        set(value) = prefs.edit().putBoolean(KEY_STUDY_ZONE_ACTIVE, value).apply()
+
+    var studyZoneName: String
+        get() = prefs.getString(KEY_STUDY_ZONE_NAME, "Study Zone") ?: "Study Zone"
+        set(value) = prefs.edit().putString(KEY_STUDY_ZONE_NAME, value).apply()
+
+    var studyZoneStartTimestamp: Long
+        get() = prefs.getLong(KEY_STUDY_ZONE_START, 0L)
+        set(value) = prefs.edit().putLong(KEY_STUDY_ZONE_START, value).apply()
+
+    var studyZoneExpireTimestamp: Long
+        get() = prefs.getLong(KEY_STUDY_ZONE_EXPIRE, 0L)
+        set(value) = prefs.edit().putLong(KEY_STUDY_ZONE_EXPIRE, value).apply()
+
+    val studyZoneRemainingSeconds: Int
+        get() {
+            if (!isStudyZoneActive) return 0
+            val diff = (studyZoneExpireTimestamp - System.currentTimeMillis()) / 1000
+            return diff.toInt().coerceAtLeast(0)
+        }
+
+    fun startStudyZone(zoneName: String, durationMinutes: Int) {
+        val now = System.currentTimeMillis()
+        prefs.edit()
+            .putBoolean(KEY_STUDY_ZONE_ACTIVE, true)
+            .putString(KEY_STUDY_ZONE_NAME, zoneName)
+            .putLong(KEY_STUDY_ZONE_START, now)
+            .putLong(KEY_STUDY_ZONE_EXPIRE, now + (durationMinutes * 60 * 1000L))
+            .apply()
+    }
+
+    fun endStudyZoneSession() {
+        prefs.edit()
+            .putBoolean(KEY_STUDY_ZONE_ACTIVE, false)
+            .putLong(KEY_STUDY_ZONE_EXPIRE, 0L)
+            .apply()
     }
 }

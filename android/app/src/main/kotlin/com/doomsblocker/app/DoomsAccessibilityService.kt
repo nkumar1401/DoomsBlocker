@@ -85,6 +85,24 @@ class DoomsAccessibilityService : AccessibilityService() {
     }
 
     private fun handleYouTubeEvent(event: AccessibilityEvent) {
+        // 0. Library Study Zone handling (Immediate 100% block of Shorts)
+        if (prefs.isStudyZoneActive) {
+            val rootNode = rootInActiveWindow
+            if (rootNode != null) {
+                try {
+                    val inShortsNow = detectShortsPresence(rootNode)
+                    if (inShortsNow) {
+                        Log.d(TAG, "Study Zone Active: Shorts blocked! Exiting...")
+                        exitShortsPlayer()
+                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_STUDY_ZONE, prefs.studyZoneName)
+                        return
+                    }
+                } finally {
+                    rootNode.recycle()
+                }
+            }
+        }
+
         // 1. Strict Lockout handling
         if (prefs.isYouTubeLocked) {
             if (prefs.isNephewModeEnabled) {

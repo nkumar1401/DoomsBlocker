@@ -47,7 +47,10 @@ class MainActivity : FlutterActivity() {
                         "isNephewModeEnabled" to prefs.isNephewModeEnabled,
                         "gameLimitMinutes" to prefs.gameLimitMinutes,
                         "restrictedAppsCount" to prefs.restrictedApps.size,
-                        "blockedChannelsCount" to prefs.blockedChannels.size
+                        "blockedChannelsCount" to prefs.blockedChannels.size,
+                        "isStudyZoneActive" to prefs.isStudyZoneActive,
+                        "studyZoneName" to prefs.studyZoneName,
+                        "studyZoneRemainingSeconds" to prefs.studyZoneRemainingSeconds
                     )
                     result.success(data)
                 }
@@ -147,6 +150,25 @@ class MainActivity : FlutterActivity() {
                     } else {
                         result.success(false)
                     }
+                }
+
+                "startStudyZone" -> {
+                    val zoneName = call.argument<String>("zoneName") ?: "Library Study Zone"
+                    val durationMinutes = call.argument<Int>("durationMinutes") ?: 60
+                    prefs.startStudyZone(zoneName, durationMinutes)
+                    result.success(true)
+                }
+
+                "endStudyZone" -> {
+                    prefs.endStudyZoneSession()
+                    try {
+                        val dismissIntent = Intent("com.doomsblocker.ACTION_DISMISS_OVERLAY")
+                        dismissIntent.setPackage(packageName)
+                        sendBroadcast(dismissIntent)
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "Error sending dismiss overlay broadcast: ${e.message}")
+                    }
+                    result.success(true)
                 }
 
                 "checkPermissions" -> {

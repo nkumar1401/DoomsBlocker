@@ -27,6 +27,7 @@ class OverlayLockActivity : Activity() {
         const val REASON_YOUTUBE_LOCKED = "reason_youtube_locked"
         const val REASON_GAME_LIMIT = "reason_game_limit"
         const val REASON_CHANNEL_BLOCKED = "reason_channel_blocked"
+        const val REASON_STUDY_ZONE = "reason_study_zone"
 
         fun start(context: Context, reason: String, blockedItem: String? = null) {
             val intent = Intent(context, OverlayLockActivity::class.java).apply {
@@ -142,6 +143,13 @@ class OverlayLockActivity : Activity() {
             REASON_CHANNEL_BLOCKED -> {
                 tvTitle.text = "Restricted YouTube Channel"
                 tvMessage.text = "The channel \"$blockedItem\" is blocked by your parental restriction rules."
+                startAutoDismissTimer(5)
+            }
+            REASON_STUDY_ZONE -> {
+                val zone = if (blockedItem.isNotEmpty()) blockedItem else prefs.studyZoneName
+                tvTitle.text = "📚 Study Zone Active"
+                tvMessage.text = "You are currently in a focused study session at $zone.\nShorts & feeds are locked until your session timer finishes or you scan the Exit QR poster."
+                pinSection.visibility = View.GONE
                 startAutoDismissTimer(5)
             }
         }

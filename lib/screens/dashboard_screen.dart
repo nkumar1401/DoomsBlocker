@@ -9,6 +9,7 @@ import 'game_limits_screen.dart';
 import 'blocked_channels_screen.dart';
 import 'nephew_mode_screen.dart';
 import 'permissions_guide_screen.dart';
+import 'study_zone_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({Key? key}) : super(key: key);
@@ -166,10 +167,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             children: [
                               if (_hasMissingPermissions) _buildPermissionWarningBanner(),
 
+                              if (_data.isStudyZoneActive) ...[
+                                _buildActiveStudyZoneBanner(),
+                                const SizedBox(height: 14),
+                              ],
+
                               // Hero Circular Ring Timer Card
                               _buildHeroRingCard(),
 
                               const SizedBox(height: 18),
+
+                              // Library Study Zone Card
+                              _buildStudyZoneCard(),
+
+                              const SizedBox(height: 14),
 
                               // Shorts Screen Time Card
                               _buildShortsMonitorCard(shortsProgress),
@@ -797,6 +808,163 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   fontSize: 11,
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveStudyZoneBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF10B981).withOpacity(0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF10B981).withOpacity(0.4)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF10B981).withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.shield, color: Color(0xFF10B981), size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Library Focus Active',
+                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  '${_formatSeconds(_data.studyZoneRemainingSeconds)} left · PIN disabled',
+                  style: const TextStyle(color: Color(0xFF6EE7B7), fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              Navigator.of(context)
+                  .push(MaterialPageRoute(builder: (_) => const StudyZoneScreen()))
+                  .then((_) => _loadData());
+            },
+            child: const Text('View Goal', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStudyZoneCard() {
+    final active = _data.isStudyZoneActive;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const StudyZoneScreen()))
+              .then((_) => _loadData());
+        },
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: active
+                  ? [
+                      const Color(0xFF10B981).withOpacity(0.2),
+                      const Color(0xFF06B6D4).withOpacity(0.1),
+                    ]
+                  : [
+                      const Color(0xFF06B6D4).withOpacity(0.15),
+                      const Color(0xFF131B2E).withOpacity(0.8),
+                    ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: active
+                  ? const Color(0xFF10B981).withOpacity(0.5)
+                  : const Color(0xFF06B6D4).withOpacity(0.3),
+              width: active ? 1.5 : 1.0,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: (active ? const Color(0xFF10B981) : const Color(0xFF06B6D4)).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.local_library_rounded,
+                  color: active ? const Color(0xFF10B981) : const Color(0xFF06B6D4),
+                  size: 26,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'Library Study Zone',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (active) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'ACTIVE',
+                              style: TextStyle(color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      active
+                          ? '${_data.studyZoneName} · ${_formatSeconds(_data.studyZoneRemainingSeconds)} remaining'
+                          : 'PIN-Free QR Goal Lock for Students',
+                      style: TextStyle(
+                        color: active ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                        fontSize: 12,
+                        fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 16),
             ],
           ),
         ),

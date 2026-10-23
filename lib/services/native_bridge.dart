@@ -138,6 +138,30 @@ class NativeBridge {
     }
   }
 
+  static Future<bool> startStudyZone({
+    required String zoneName,
+    required int durationMinutes,
+  }) async {
+    try {
+      final res = await _channel.invokeMethod<bool>('startStudyZone', {
+        'zoneName': zoneName,
+        'durationMinutes': durationMinutes,
+      });
+      return res ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<bool> endStudyZone() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('endStudyZone');
+      return res ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   static Future<Map<String, bool>> checkPermissions() async {
     try {
       final res = await _channel.invokeMethod<Map<dynamic, dynamic>>('checkPermissions');

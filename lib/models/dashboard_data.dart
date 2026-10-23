@@ -8,6 +8,9 @@ class DashboardData {
   final int gameLimitMinutes;
   final int restrictedAppsCount;
   final int blockedChannelsCount;
+  final bool isStudyZoneActive;
+  final String studyZoneName;
+  final int studyZoneRemainingSeconds;
 
   DashboardData({
     required this.shortsLimitMinutes,
@@ -19,6 +22,9 @@ class DashboardData {
     required this.gameLimitMinutes,
     required this.restrictedAppsCount,
     required this.blockedChannelsCount,
+    required this.isStudyZoneActive,
+    required this.studyZoneName,
+    required this.studyZoneRemainingSeconds,
   });
 
   factory DashboardData.fromMap(Map<dynamic, dynamic> map) {
@@ -32,6 +38,9 @@ class DashboardData {
       gameLimitMinutes: (map['gameLimitMinutes'] as num?)?.toInt() ?? 20,
       restrictedAppsCount: (map['restrictedAppsCount'] as num?)?.toInt() ?? 0,
       blockedChannelsCount: (map['blockedChannelsCount'] as num?)?.toInt() ?? 0,
+      isStudyZoneActive: map['isStudyZoneActive'] as bool? ?? false,
+      studyZoneName: map['studyZoneName'] as String? ?? 'Library Study Zone',
+      studyZoneRemainingSeconds: (map['studyZoneRemainingSeconds'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -46,6 +55,9 @@ class DashboardData {
       gameLimitMinutes: 20,
       restrictedAppsCount: 0,
       blockedChannelsCount: 0,
+      isStudyZoneActive: false,
+      studyZoneName: 'Library Study Zone',
+      studyZoneRemainingSeconds: 0,
     );
   }
 }
