@@ -86,7 +86,7 @@ class DoomsAccessibilityService : AccessibilityService() {
 
         if (pkgName == YOUTUBE_PACKAGE) {
             handleYouTubeEvent(event)
-        } else if (prefs.restrictedApps.contains(pkgName)) {
+        } else if (prefs.restrictedApps.contains(pkgName) || isSocialOrDistractionApp(pkgName)) {
             handleRestrictedAppEvent(pkgName)
         } else {
             isInsideShorts = false
@@ -262,6 +262,18 @@ class DoomsAccessibilityService : AccessibilityService() {
     }
 
     private fun handleRestrictedAppEvent(pkgName: String) {
+        if (prefs.isStudyZoneActive) {
+            Log.w(TAG, "Study Zone Active: App $pkgName blocked during study hours! Ejecting...")
+            ejectToHomeScreen(pkgName)
+            OverlayLockActivity.start(
+                this,
+                OverlayLockActivity.REASON_STUDY_ZONE,
+                prefs.studyZoneName,
+                pkgName
+            )
+            return
+        }
+
         val limitMinutes = prefs.gameLimitMinutes
         val limitSeconds = limitMinutes * 60
         val usedSeconds = prefs.getAppUsageSeconds(pkgName)
@@ -323,20 +335,41 @@ class DoomsAccessibilityService : AccessibilityService() {
         }
         rootNode?.recycle()
 
-        // 2. Restricted Game Time Tracking
+        // 2. Restricted Game & Social App Time Tracking & Study Zone Enforcement
         val currentPkg = activePackage
-        if (currentPkg != null && prefs.restrictedApps.contains(currentPkg)) {
-            prefs.addAppUsageSeconds(currentPkg, deltaSeconds)
-            val totalUsed = prefs.getTotalRestrictedAppsUsageSeconds()
-            val limitSec = prefs.gameLimitMinutes * 60
-
-            Log.d(TAG, "Restricted App ($currentPkg) Active: $totalUsed s / $limitSec s limit")
-
-            if (totalUsed >= limitSec) {
+        if (currentPkg != null && (prefs.restrictedApps.contains(currentPkg) || isSocialOrDistractionApp(currentPkg))) {
+            if (prefs.isStudyZoneActive) {
+                Log.w(TAG, "Study Zone Active: $currentPkg opened during focus hours! Ejecting...")
                 ejectToHomeScreen(currentPkg)
-                OverlayLockActivity.start(this, OverlayLockActivity.REASON_GAME_LIMIT, getAppLabel(currentPkg), currentPkg)
+                OverlayLockActivity.start(
+                    this,
+                    OverlayLockActivity.REASON_STUDY_ZONE,
+                    prefs.studyZoneName,
+                    currentPkg
+                )
+            } else if (prefs.restrictedApps.contains(currentPkg)) {
+                prefs.addAppUsageSeconds(currentPkg, deltaSeconds)
+                val totalUsed = prefs.getTotalRestrictedAppsUsageSeconds()
+                val limitSec = prefs.gameLimitMinutes * 60
+
+                Log.d(TAG, "Restricted App ($currentPkg) Active: $totalUsed s / $limitSec s limit")
+
+                if (totalUsed >= limitSec) {
+                    ejectToHomeScreen(currentPkg)
+                    OverlayLockActivity.start(this, OverlayLockActivity.REASON_GAME_LIMIT, getAppLabel(currentPkg), currentPkg)
+                }
             }
         }
+    }
+
+    private fun isSocialOrDistractionApp(pkgName: String): Boolean {
+        val lower = pkgName.lowercase(Locale.US)
+        return lower.contains("instagram") ||
+                lower.contains("snapchat") ||
+                lower.contains("tiktok") ||
+                lower.contains("facebook.katana") ||
+                lower.contains("twitter") ||
+                lower.contains("reddit")
     }
 
     private fun exitShortsPlayer() {

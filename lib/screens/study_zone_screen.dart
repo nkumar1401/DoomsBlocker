@@ -246,6 +246,10 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                     _buildPresetChip('2 Hours', 120, duration, (val) => setSheetState(() => duration = val)),
                     _buildPresetChip('3 Hours', 180, duration, (val) => setSheetState(() => duration = val)),
                     _buildPresetChip('4 Hours', 240, duration, (val) => setSheetState(() => duration = val)),
+                    _buildPresetChip('6 Hours', 360, duration, (val) => setSheetState(() => duration = val)),
+                    _buildPresetChip('8 Hours', 480, duration, (val) => setSheetState(() => duration = val)),
+                    _buildPresetChip('10 Hours', 600, duration, (val) => setSheetState(() => duration = val)),
+                    _buildPresetChip('12 Hours', 720, duration, (val) => setSheetState(() => duration = val)),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -253,21 +257,44 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Custom Duration', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                    Text(
-                      '${duration ~/ 60 > 0 ? '${duration ~/ 60}h ' : ''}${duration % 60}m',
-                      style: const TextStyle(
-                        color: Color(0xFF06B6D4),
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                    InkWell(
+                      onTap: () {
+                        _showCustomDurationDialog(context, duration, (newVal) {
+                          setSheetState(() => duration = newVal);
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF06B6D4).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF06B6D4).withOpacity(0.4)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.edit, size: 14, color: Color(0xFF06B6D4)),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${duration ~/ 60 > 0 ? '${duration ~/ 60}h ' : ''}${duration % 60}m (Tap to edit)',
+                              style: const TextStyle(
+                                color: Color(0xFF06B6D4),
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
                 ),
                 Slider(
-                  value: duration.toDouble(),
+                  value: duration.toDouble().clamp(15.0, 720.0),
                   min: 15,
-                  max: 360,
-                  divisions: 23, // 15-min increments
+                  max: 720,
+                  divisions: 47, // 15-min increments up to 12 hours
                   activeColor: const Color(0xFF06B6D4),
                   inactiveColor: Colors.white12,
                   onChanged: (val) => setSheetState(() => duration = val.toInt()),
@@ -327,6 +354,108 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
             ),
           );
         },
+      ),
+    );
+  }
+
+  Future<void> _showCustomDurationDialog(
+    BuildContext sheetContext,
+    int currentMinutes,
+    Function(int) onSelected,
+  ) async {
+    final hoursCtrl = TextEditingController(text: '${currentMinutes ~/ 60}');
+    final minsCtrl = TextEditingController(text: '${currentMinutes % 60}');
+
+    await showDialog<void>(
+      context: sheetContext,
+      builder: (dlgCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Row(
+          children: [
+            Icon(Icons.timer_outlined, color: Color(0xFF06B6D4)),
+            SizedBox(width: 8),
+            Text('Enter Study Goal Time', style: TextStyle(color: Colors.white, fontSize: 17)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Set any custom duration for your study session (up to 24 hours).',
+              style: TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: hoursCtrl,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                    decoration: InputDecoration(
+                      labelText: 'Hours',
+                      labelStyle: const TextStyle(color: Colors.white54),
+                      suffixText: 'hr',
+                      suffixStyle: const TextStyle(color: Colors.white54),
+                      filled: true,
+                      fillColor: Colors.black26,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: minsCtrl,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                    decoration: InputDecoration(
+                      labelText: 'Minutes',
+                      labelStyle: const TextStyle(color: Colors.white54),
+                      suffixText: 'min',
+                      suffixStyle: const TextStyle(color: Colors.white54),
+                      filled: true,
+                      fillColor: Colors.black26,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dlgCtx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF06B6D4),
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              final h = int.tryParse(hoursCtrl.text.trim()) ?? 0;
+              final m = int.tryParse(minsCtrl.text.trim()) ?? 0;
+              final total = (h * 60) + m;
+              if (total >= 15 && total <= 1440) {
+                onSelected(total);
+                Navigator.pop(dlgCtx);
+              } else {
+                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter a duration between 15 minutes and 24 hours.'),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+              }
+            },
+            child: const Text('Set Time', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }

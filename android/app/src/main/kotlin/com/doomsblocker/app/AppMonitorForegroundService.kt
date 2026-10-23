@@ -108,27 +108,51 @@ class AppMonitorForegroundService : Service() {
             // In Adult Mode, normal YouTube app & longform video are permitted; Shorts is strictly blocked by AccessibilityService!
         }
 
-        // 2. Restricted apps & games check
-        if (prefs.restrictedApps.contains(fgPackage)) {
-            if (deltaSeconds > 0) {
-                prefs.addAppUsageSeconds(fgPackage, deltaSeconds)
-            }
-
-            val appUsedSeconds = prefs.getAppUsageSeconds(fgPackage)
-            val totalUsedSeconds = prefs.getTotalRestrictedAppsUsageSeconds()
-            val limitSeconds = prefs.gameLimitMinutes * 60
-
-            if (totalUsedSeconds >= limitSeconds || appUsedSeconds >= limitSeconds) {
-                Log.w(TAG, "Restricted app limit reached ($appUsedSeconds s used / $limitSeconds s limit). Locking...")
+        // 2. Restricted apps & games check & Study Zone Enforcement
+        if (prefs.restrictedApps.contains(fgPackage) || isSocialOrDistractionApp(fgPackage)) {
+            if (prefs.isStudyZoneActive) {
+                Log.w(TAG, "Study Zone Active: Foreground app $fgPackage is blocked during study hours! Ejecting...")
                 ejectToHome(fgPackage)
                 OverlayLockActivity.start(
                     this,
-                    OverlayLockActivity.REASON_GAME_LIMIT,
-                    getAppLabel(fgPackage),
+                    OverlayLockActivity.REASON_STUDY_ZONE,
+                    prefs.studyZoneName,
                     fgPackage
                 )
+                return
+            }
+
+            if (prefs.restrictedApps.contains(fgPackage)) {
+                if (deltaSeconds > 0) {
+                    prefs.addAppUsageSeconds(fgPackage, deltaSeconds)
+                }
+
+                val appUsedSeconds = prefs.getAppUsageSeconds(fgPackage)
+                val totalUsedSeconds = prefs.getTotalRestrictedAppsUsageSeconds()
+                val limitSeconds = prefs.gameLimitMinutes * 60
+
+                if (totalUsedSeconds >= limitSeconds || appUsedSeconds >= limitSeconds) {
+                    Log.w(TAG, "Restricted app limit reached ($appUsedSeconds s used / $limitSeconds s limit). Locking...")
+                    ejectToHome(fgPackage)
+                    OverlayLockActivity.start(
+                        this,
+                        OverlayLockActivity.REASON_GAME_LIMIT,
+                        getAppLabel(fgPackage),
+                        fgPackage
+                    )
+                }
             }
         }
+    }
+
+    private fun isSocialOrDistractionApp(pkgName: String): Boolean {
+        val lower = pkgName.lowercase(Locale.US)
+        return lower.contains("instagram") ||
+                lower.contains("snapchat") ||
+                lower.contains("tiktok") ||
+                lower.contains("facebook.katana") ||
+                lower.contains("twitter") ||
+                lower.contains("reddit")
     }
 
     private fun getForegroundPackage(now: Long): String? {

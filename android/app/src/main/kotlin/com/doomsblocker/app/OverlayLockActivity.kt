@@ -157,7 +157,7 @@ class OverlayLockActivity : Activity() {
             REASON_STUDY_ZONE -> {
                 val zone = if (blockedItem.isNotEmpty()) blockedItem else prefs.studyZoneName
                 tvTitle.text = "📚 Study Zone Active"
-                tvMessage.text = "You are currently in a focused study session at $zone.\nShorts & feeds are locked until your session timer finishes or you scan the Exit QR poster."
+                tvMessage.text = "You are currently in a focused study session at $zone.\nDistractions (Instagram, Games & Shorts) are locked until your session timer finishes or you scan the Exit QR poster."
                 pinSection.visibility = View.GONE
                 startAutoDismissTimer(5)
             }
