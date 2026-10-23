@@ -108,22 +108,24 @@ class AppMonitorForegroundService : Service() {
             // In Adult Mode, normal YouTube app & longform video are permitted; Shorts is strictly blocked by AccessibilityService!
         }
 
-        // 2. Nephew Mode restricted games check
-        if (prefs.isNephewModeEnabled && prefs.restrictedApps.contains(fgPackage)) {
+        // 2. Restricted apps & games check
+        if (prefs.restrictedApps.contains(fgPackage)) {
             if (deltaSeconds > 0) {
                 prefs.addAppUsageSeconds(fgPackage, deltaSeconds)
             }
 
+            val appUsedSeconds = prefs.getAppUsageSeconds(fgPackage)
             val totalUsedSeconds = prefs.getTotalRestrictedAppsUsageSeconds()
             val limitSeconds = prefs.gameLimitMinutes * 60
 
-            if (totalUsedSeconds >= limitSeconds) {
-                Log.w(TAG, "Combined game limit reached ($totalUsedSeconds >= $limitSeconds s). Locking...")
-                ejectToHome()
+            if (totalUsedSeconds >= limitSeconds || appUsedSeconds >= limitSeconds) {
+                Log.w(TAG, "Restricted app limit reached ($appUsedSeconds s used / $limitSeconds s limit). Locking...")
+                ejectToHome(fgPackage)
                 OverlayLockActivity.start(
                     this,
                     OverlayLockActivity.REASON_GAME_LIMIT,
-                    getAppLabel(fgPackage)
+                    getAppLabel(fgPackage),
+                    fgPackage
                 )
             }
         }
@@ -143,7 +145,7 @@ class AppMonitorForegroundService : Service() {
         return fgPkg
     }
 
-    private fun ejectToHome() {
+    private fun ejectToHome(pkgToKill: String? = null) {
         try {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
             audioManager?.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MEDIA_PAUSE))
@@ -154,9 +156,13 @@ class AppMonitorForegroundService : Service() {
 
         try {
             val am = getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
-            am?.killBackgroundProcesses("com.google.android.youtube")
+            val target = pkgToKill ?: "com.google.android.youtube"
+            am?.killBackgroundProcesses(target)
+            if (target != "com.google.android.youtube") {
+                am?.killBackgroundProcesses("com.google.android.youtube")
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Error killing background YouTube process: ${e.message}")
+            Log.e(TAG, "Error killing background process: ${e.message}")
         }
 
         val homeIntent = Intent(Intent.ACTION_MAIN).apply {

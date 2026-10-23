@@ -23,17 +23,24 @@ class OverlayLockActivity : Activity() {
     companion object {
         const val EXTRA_REASON = "extra_lock_reason"
         const val EXTRA_BLOCKED_ITEM = "extra_blocked_item"
+        const val EXTRA_PACKAGE_NAME = "extra_package_name"
         const val REASON_SHORTS_LIMIT = "reason_shorts_limit"
         const val REASON_YOUTUBE_LOCKED = "reason_youtube_locked"
         const val REASON_GAME_LIMIT = "reason_game_limit"
         const val REASON_CHANNEL_BLOCKED = "reason_channel_blocked"
         const val REASON_STUDY_ZONE = "reason_study_zone"
 
-        fun start(context: Context, reason: String, blockedItem: String? = null) {
+        fun start(
+            context: Context,
+            reason: String,
+            blockedItem: String? = null,
+            targetPackage: String? = null
+        ) {
             val intent = Intent(context, OverlayLockActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 putExtra(EXTRA_REASON, reason)
                 putExtra(EXTRA_BLOCKED_ITEM, blockedItem)
+                putExtra(EXTRA_PACKAGE_NAME, targetPackage)
             }
             context.startActivity(intent)
         }
@@ -54,6 +61,7 @@ class OverlayLockActivity : Activity() {
     private lateinit var btnUnlockPin: Button
     private lateinit var btnCloseOverlay: TextView
     private var failedPinAttempts = 0
+    private var targetPackage: String? = null
 
     private val dismissReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -116,6 +124,7 @@ class OverlayLockActivity : Activity() {
     private fun handleIntent(intent: Intent) {
         val reason = intent.getStringExtra(EXTRA_REASON) ?: REASON_SHORTS_LIMIT
         val blockedItem = intent.getStringExtra(EXTRA_BLOCKED_ITEM) ?: ""
+        targetPackage = intent.getStringExtra(EXTRA_PACKAGE_NAME)
 
         when (reason) {
             REASON_SHORTS_LIMIT -> {
@@ -228,18 +237,38 @@ class OverlayLockActivity : Activity() {
                 prefs.unlockYouTubeEmergency()
                 prefs.resetGamesUsageEmergency()
                 countDownTimer?.cancel()
-                Toast.makeText(this, "Parent PIN accepted! Resuming YouTube...", Toast.LENGTH_SHORT).show()
 
-                // Seamlessly reopen YouTube directly
-                try {
-                    val ytIntent = packageManager.getLaunchIntentForPackage("com.google.android.youtube")?.apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                val pkgToLaunch = targetPackage
+                if (!pkgToLaunch.isNullOrEmpty() && pkgToLaunch != "com.google.android.youtube") {
+                    val appLabel = try {
+                        val appInfo = packageManager.getApplicationInfo(pkgToLaunch, 0)
+                        packageManager.getApplicationLabel(appInfo).toString()
+                    } catch (_: Exception) {
+                        "App"
                     }
-                    if (ytIntent != null) {
-                        startActivity(ytIntent)
+                    Toast.makeText(this, "PIN accepted! Resuming $appLabel...", Toast.LENGTH_SHORT).show()
+                    try {
+                        val resumeIntent = packageManager.getLaunchIntentForPackage(pkgToLaunch)?.apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                        }
+                        if (resumeIntent != null) {
+                            startActivity(resumeIntent)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("OverlayLockActivity", "Error reopening $pkgToLaunch: ${e.message}")
                     }
-                } catch (e: Exception) {
-                    Log.e("OverlayLockActivity", "Error reopening YouTube: ${e.message}")
+                } else {
+                    Toast.makeText(this, "Parent PIN accepted! Resuming YouTube...", Toast.LENGTH_SHORT).show()
+                    try {
+                        val ytIntent = packageManager.getLaunchIntentForPackage("com.google.android.youtube")?.apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                        }
+                        if (ytIntent != null) {
+                            startActivity(ytIntent)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("OverlayLockActivity", "Error reopening YouTube: ${e.message}")
+                    }
                 }
 
                 finish()

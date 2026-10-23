@@ -231,11 +231,12 @@ class DoomsAccessibilityService : AccessibilityService() {
         val limitMinutes = prefs.gameLimitMinutes
         val limitSeconds = limitMinutes * 60
         val usedSeconds = prefs.getAppUsageSeconds(pkgName)
+        val totalUsed = prefs.getTotalRestrictedAppsUsageSeconds()
 
-        if (usedSeconds >= limitSeconds) {
+        if (usedSeconds >= limitSeconds || totalUsed >= limitSeconds) {
             Log.w(TAG, "App $pkgName reached limit of $limitMinutes mins! Ejecting to home...")
-            ejectToHomeScreen()
-            OverlayLockActivity.start(this, OverlayLockActivity.REASON_GAME_LIMIT, getAppLabel(pkgName))
+            ejectToHomeScreen(pkgName)
+            OverlayLockActivity.start(this, OverlayLockActivity.REASON_GAME_LIMIT, getAppLabel(pkgName), pkgName)
         }
     }
 
@@ -273,12 +274,12 @@ class DoomsAccessibilityService : AccessibilityService() {
 
                 if (prefs.isNephewModeEnabled) {
                     // In Nephew Mode: Lock ENTIRE YouTube application
-                    ejectToHomeScreen()
-                    OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED)
+                    ejectToHomeScreen(YOUTUBE_PACKAGE)
+                    OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = YOUTUBE_PACKAGE)
                 } else {
                     // In Adult Mode: Only exit Shorts! Allow longform videos
                     exitShortsPlayer()
-                    OverlayLockActivity.start(this, OverlayLockActivity.REASON_SHORTS_LIMIT)
+                    OverlayLockActivity.start(this, OverlayLockActivity.REASON_SHORTS_LIMIT, targetPackage = YOUTUBE_PACKAGE)
                 }
                 isInsideShorts = false
             }
@@ -294,8 +295,8 @@ class DoomsAccessibilityService : AccessibilityService() {
             Log.d(TAG, "Restricted App ($currentPkg) Active: $totalUsed s / $limitSec s limit")
 
             if (totalUsed >= limitSec) {
-                ejectToHomeScreen()
-                OverlayLockActivity.start(this, OverlayLockActivity.REASON_GAME_LIMIT, getAppLabel(currentPkg))
+                ejectToHomeScreen(currentPkg)
+                OverlayLockActivity.start(this, OverlayLockActivity.REASON_GAME_LIMIT, getAppLabel(currentPkg), currentPkg)
             }
         }
     }
@@ -314,7 +315,7 @@ class DoomsAccessibilityService : AccessibilityService() {
         performGlobalAction(GLOBAL_ACTION_BACK)
     }
 
-    private fun ejectToHomeScreen() {
+    private fun ejectToHomeScreen(pkgToKill: String? = null) {
         // 1. Immediately pause audio/media so playback stops
         try {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
@@ -324,15 +325,19 @@ class DoomsAccessibilityService : AccessibilityService() {
             Log.e(TAG, "Error pausing audio: ${e.message}")
         }
 
-        // 2. Press BACK before going Home so YouTube exits playback instead of entering PiP
+        // 2. Press BACK before going Home so app exits playback/activity
         performGlobalAction(GLOBAL_ACTION_BACK)
 
-        // 3. Kill YouTube background process to destroy the floating Picture-in-Picture (PiP) window
+        // 3. Kill target package background process to destroy floating/playing windows
         try {
             val am = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
-            am?.killBackgroundProcesses(YOUTUBE_PACKAGE)
+            val target = pkgToKill ?: YOUTUBE_PACKAGE
+            am?.killBackgroundProcesses(target)
+            if (target != YOUTUBE_PACKAGE) {
+                am?.killBackgroundProcesses(YOUTUBE_PACKAGE)
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Error killing background YouTube process: ${e.message}")
+            Log.e(TAG, "Error killing background process: ${e.message}")
         }
 
         // 4. Return to phone Home Screen

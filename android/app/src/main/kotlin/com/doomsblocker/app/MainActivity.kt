@@ -214,11 +214,48 @@ class MainActivity : FlutterActivity() {
         val resolveInfos = pm.queryIntentActivities(intent, 0)
         val restricted = prefs.restrictedApps
 
+        val systemBlacklist = setOf(
+            "com.android.settings",
+            "com.google.android.settings",
+            "com.android.systemui",
+            "com.android.vending",
+            "com.google.android.googlequicksearchbox",
+            "com.google.android.packageinstaller",
+            "com.android.packageinstaller",
+            "com.google.android.dialer",
+            "com.android.dialer",
+            "com.android.phone",
+            "com.google.android.deskclock",
+            "com.android.deskclock",
+            "com.google.android.calculator",
+            "com.android.calculator2",
+            "com.google.android.contacts",
+            "com.android.contacts",
+            "com.google.android.apps.messaging",
+            "com.android.mms",
+            "com.android.camera",
+            "com.google.android.GoogleCamera"
+        )
+
         val list = mutableListOf<Map<String, Any>>()
         for (info in resolveInfos) {
             val pkg = info.activityInfo.packageName
             // Skip self and basic system framework
             if (pkg == packageName) continue
+            if (systemBlacklist.contains(pkg) || pkg.startsWith("com.android.internal")) continue
+
+            val appInfo = info.activityInfo.applicationInfo
+            val isSystem = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+            val isGame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                appInfo.category == ApplicationInfo.CATEGORY_GAME || (appInfo.flags and ApplicationInfo.FLAG_IS_GAME) != 0
+            } else {
+                (appInfo.flags and ApplicationInfo.FLAG_IS_GAME) != 0
+            }
+
+            // Exclude system utilities unless it's a game or already restricted by user
+            if (isSystem && !isGame && !restricted.contains(pkg)) {
+                continue
+            }
 
             val label = info.loadLabel(pm).toString()
             val usedSec = prefs.getAppUsageSeconds(pkg)
@@ -229,11 +266,15 @@ class MainActivity : FlutterActivity() {
                     "name" to label,
                     "packageName" to pkg,
                     "isRestricted" to isRestricted,
-                    "usedMinutes" to (usedSec / 60)
+                    "usedMinutes" to (usedSec / 60),
+                    "isGame" to isGame
                 )
             )
         }
-        return list.sortedByDescending { it["isRestricted"] as Boolean }
+        return list.sortedWith(
+            compareByDescending<Map<String, Any>> { it["isRestricted"] as Boolean }
+                .thenByDescending { it["isGame"] as Boolean }
+        )
     }
 
     private fun isAccessibilityServiceEnabled(): Boolean {

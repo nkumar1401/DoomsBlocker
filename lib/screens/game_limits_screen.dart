@@ -14,6 +14,7 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
   List<InstalledAppModel> _allApps = [];
   List<InstalledAppModel> _filteredApps = [];
   bool _isLoading = true;
+  bool _showGamesOnly = true;
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -36,10 +37,16 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
   }
 
   void _filterApps(String query) {
+    var source = _allApps;
+    if (_showGamesOnly) {
+      final games = _allApps.where((app) => app.isGame || app.isRestricted).toList();
+      // If OS reports games or restricted apps, use them; otherwise show all
+      source = games.isNotEmpty ? games : _allApps;
+    }
     if (query.trim().isEmpty) {
-      _filteredApps = List.from(_allApps);
+      _filteredApps = List.from(source);
     } else {
-      _filteredApps = _allApps
+      _filteredApps = source
           .where((app) =>
               app.name.toLowerCase().contains(query.toLowerCase()) ||
               app.packageName.toLowerCase().contains(query.toLowerCase()))
@@ -147,6 +154,28 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
                   ),
                 ),
 
+                // Filter Tabs: Games Only vs All Installed
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Row(
+                    children: [
+                      _buildTypeFilterChip('🎮 Games Only', _showGamesOnly, () {
+                        setState(() {
+                          _showGamesOnly = true;
+                          _filterApps(_searchController.text);
+                        });
+                      }),
+                      const SizedBox(width: 8),
+                      _buildTypeFilterChip('📱 All Installed Apps', !_showGamesOnly, () {
+                        setState(() {
+                          _showGamesOnly = false;
+                          _filterApps(_searchController.text);
+                        });
+                      }),
+                    ],
+                  ),
+                ),
+
                 // Header Info
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -154,7 +183,9 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'INSTALLED APPS (${_filteredApps.length})',
+                        _showGamesOnly
+                            ? 'INSTALLED GAMES (${_filteredApps.length})'
+                            : 'INSTALLED APPS (${_filteredApps.length})',
                         style: const TextStyle(color: Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                       Text(
@@ -215,15 +246,40 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          app.name,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                app.name,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 14,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            if (app.isGame) ...[
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF8B5CF6).withOpacity(0.2),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                  border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.5)),
+                                                ),
+                                                child: const Text(
+                                                  'GAME',
+                                                  style: TextStyle(
+                                                    color: Color(0xFFA78BFA),
+                                                    fontSize: 8.5,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
@@ -251,6 +307,32 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _buildTypeFilterChip(String label, bool isSelected, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF3B82F6) : const Color(0xFF1E293B),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF3B82F6) : const Color(0xFF334155),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          ),
+        ),
+      ),
     );
   }
 }

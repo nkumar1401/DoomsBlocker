@@ -5,6 +5,5 @@
     android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagReportViewIds|flagIncludeNotImportantViews"
     android:canRetrieveWindowContent="true"
     android:canPerformGestures="false"
-    android:packageNames="com.google.android.youtube"
     android:notificationTimeout="80"
     android:description="@string/accessibility_service_description" />
