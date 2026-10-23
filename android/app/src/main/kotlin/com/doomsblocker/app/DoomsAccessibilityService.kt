@@ -11,6 +11,7 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import java.util.Locale
 
 class DoomsAccessibilityService : AccessibilityService() {
 
@@ -73,6 +74,14 @@ class DoomsAccessibilityService : AccessibilityService() {
         if (event == null) return
 
         val pkgName = event.packageName?.toString() ?: return
+
+        // Ignore system UI overlays (status bar, notifications, keyboard) so they don't corrupt activePackage
+        if (pkgName == "com.android.systemui" ||
+            pkgName == "com.google.android.inputmethod.latin" ||
+            pkgName.startsWith("com.android.systemui")) {
+            return
+        }
+
         activePackage = pkgName
 
         if (pkgName == YOUTUBE_PACKAGE) {
@@ -94,7 +103,7 @@ class DoomsAccessibilityService : AccessibilityService() {
                     if (inShortsNow) {
                         Log.d(TAG, "Study Zone Active: Shorts blocked! Exiting...")
                         exitShortsPlayer()
-                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_STUDY_ZONE, prefs.studyZoneName)
+                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_STUDY_ZONE, prefs.studyZoneName, YOUTUBE_PACKAGE)
                         return
                     }
                 } finally {
@@ -108,8 +117,8 @@ class DoomsAccessibilityService : AccessibilityService() {
             if (prefs.isNephewModeEnabled) {
                 // Nephew Mode: Lock ENTIRE YouTube application
                 Log.d(TAG, "Nephew Mode active & YouTube locked! Ejecting to home...")
-                ejectToHomeScreen()
-                OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED)
+                ejectToHomeScreen(YOUTUBE_PACKAGE)
+                OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = YOUTUBE_PACKAGE)
                 return
             } else {
                 // Adult Mode: Allow longform videos, but immediately kick out if user tries to enter Shorts!
@@ -120,7 +129,7 @@ class DoomsAccessibilityService : AccessibilityService() {
                         if (inShortsNow) {
                             Log.d(TAG, "Adult Mode: Shorts is in lock window! Exiting Shorts...")
                             exitShortsPlayer()
-                            OverlayLockActivity.start(this, OverlayLockActivity.REASON_SHORTS_LIMIT)
+                            OverlayLockActivity.start(this, OverlayLockActivity.REASON_SHORTS_LIMIT, targetPackage = YOUTUBE_PACKAGE)
                             return
                         }
                     } finally {
@@ -154,41 +163,65 @@ class DoomsAccessibilityService : AccessibilityService() {
             }
         }
 
-        // 2. Shorts-specific buttons: "Remix" only appears inside the Shorts player
+        // 2. Shorts-specific button: "Remix" only appears inside the Shorts player
         val remixNodes = root.findAccessibilityNodeInfosByText("Remix")
         if (!remixNodes.isNullOrEmpty()) {
             remixNodes.forEach { it.recycle() }
             return true
         }
 
-        // 3. Check for vertical Shorts action buttons (Dislike and Sound)
-        // (Avoids checking just "Shorts" as that matches the bottom navigation tab on the home feed)
-        val soundNodes = root.findAccessibilityNodeInfosByText("Sound")
-        if (!soundNodes.isNullOrEmpty()) {
-            soundNodes.forEach { it.recycle() }
-            return true
-        }
-
-        // 4. Check for "Remix this video" in content description
-        return hasShortsSpecificDescription(root, 0)
+        // 3. Deep hierarchical scan for reel keywords, descriptions, and action buttons
+        return scanForShortsIndicators(root, 0)
     }
 
-    private fun hasShortsSpecificDescription(node: AccessibilityNodeInfo?, depth: Int): Boolean {
-        if (node == null || depth > 8) return false
+    private fun scanForShortsIndicators(node: AccessibilityNodeInfo?, depth: Int): Boolean {
+        if (node == null || depth > 30) return false
+
+        val resId = node.viewIdResourceName
+        if (resId != null) {
+            val lowerId = resId.lowercase(Locale.US)
+            val isNavOrShelf = lowerId.contains("shelf") || lowerId.contains("pivot") || lowerId.contains("tab")
+            if (!isNavOrShelf) {
+                if (lowerId.contains("reel") ||
+                    lowerId.contains("shorts_player") ||
+                    lowerId.contains("shorts_container") ||
+                    lowerId.contains("shorts_video") ||
+                    lowerId.contains("shorts_surface") ||
+                    lowerId.contains("shorts_pager")) {
+                    return true
+                }
+            }
+        }
+
         val desc = node.contentDescription?.toString()
         if (desc != null) {
-            if (desc.contains("Remix this video", ignoreCase = true) ||
-                desc.contains("Dislike this video along with", ignoreCase = true)) {
+            val lowerDesc = desc.lowercase(Locale.US)
+            if (lowerDesc.contains("remix this") ||
+                lowerDesc.contains("remix with") ||
+                lowerDesc.contains("dislike this short") ||
+                lowerDesc.contains("dislike this video along with") ||
+                lowerDesc.contains("create a short using") ||
+                lowerDesc.contains("use this sound") ||
+                (lowerDesc.contains("dislike") && (lowerDesc.contains("other") || lowerDesc.contains("person") || lowerDesc.contains("along with")))) {
                 return true
             }
         }
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i)
-            if (hasShortsSpecificDescription(child, depth + 1)) {
-                child?.recycle()
+
+        val text = node.text?.toString()
+        if (text != null) {
+            val lowerText = text.lowercase(Locale.US)
+            if (lowerText == "remix" || lowerText == "use this sound") {
                 return true
             }
-            child?.recycle()
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            if (child != null) {
+                val found = scanForShortsIndicators(child, depth + 1)
+                child.recycle()
+                if (found) return true
+            }
         }
         return false
     }
@@ -207,14 +240,15 @@ class DoomsAccessibilityService : AccessibilityService() {
                             if (text.contains(blocked, ignoreCase = true)) {
                                 Log.w(TAG, "Blocked channel detected: $text! Ejecting...")
                                 if (prefs.isNephewModeEnabled) {
-                                    ejectToHomeScreen()
+                                    ejectToHomeScreen(YOUTUBE_PACKAGE)
                                 } else {
                                     exitShortsPlayer()
                                 }
                                 OverlayLockActivity.start(
                                     this,
                                     OverlayLockActivity.REASON_CHANNEL_BLOCKED,
-                                    blocked
+                                    blocked,
+                                    YOUTUBE_PACKAGE
                                 )
                                 nodes.forEach { it.recycle() }
                                 return
@@ -247,14 +281,17 @@ class DoomsAccessibilityService : AccessibilityService() {
 
         if (deltaSeconds <= 0) return
 
-        // If currently in YouTube, actively verify Shorts presence every second directly from the window
-        if (activePackage == YOUTUBE_PACKAGE) {
-            val rootNode = rootInActiveWindow
+        // Check active foreground window directly
+        val rootNode = rootInActiveWindow
+        val windowPkg = rootNode?.packageName?.toString() ?: activePackage
+
+        if (windowPkg == YOUTUBE_PACKAGE) {
+            activePackage = YOUTUBE_PACKAGE
             if (rootNode != null) {
                 try {
                     isInsideShorts = detectShortsPresence(rootNode)
-                } finally {
-                    rootNode.recycle()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in detectShortsPresence: ${e.message}")
                 }
             }
         }
@@ -265,7 +302,7 @@ class DoomsAccessibilityService : AccessibilityService() {
             val usedSec = prefs.shortsUsedSecondsToday
             val limitSec = prefs.shortsLimitMinutes * 60
 
-            Log.d(TAG, "Shorts Active: $usedSec s / $limitSec s limit")
+            Log.d(TAG, "Shorts Active: $usedSec s / $limitSec s limit (Limit: ${prefs.shortsLimitMinutes} min)")
 
             if (usedSec >= limitSec) {
                 Log.w(TAG, "Shorts limit hit ($usedSec >= $limitSec s)! Enforcing Lockout for ${prefs.shortsLockDurationMinutes} min!")
@@ -284,6 +321,7 @@ class DoomsAccessibilityService : AccessibilityService() {
                 isInsideShorts = false
             }
         }
+        rootNode?.recycle()
 
         // 2. Restricted Game Time Tracking
         val currentPkg = activePackage
