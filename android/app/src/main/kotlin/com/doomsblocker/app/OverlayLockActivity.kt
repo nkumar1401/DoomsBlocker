@@ -8,7 +8,9 @@ import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
 import android.os.CountDownTimer
+import android.util.Log
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -49,6 +51,8 @@ class OverlayLockActivity : Activity() {
     private lateinit var pinInputContainer: LinearLayout
     private lateinit var etPin: EditText
     private lateinit var btnUnlockPin: Button
+    private lateinit var btnCloseOverlay: TextView
+    private var failedPinAttempts = 0
 
     private val dismissReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -74,6 +78,7 @@ class OverlayLockActivity : Activity() {
         tvCountdownLabel = findViewById(R.id.tvCountdownLabel)
         tvCountdown = findViewById(R.id.tvCountdown)
         btnGoHome = findViewById(R.id.btnGoHome)
+        btnCloseOverlay = findViewById(R.id.btnCloseOverlay)
         pinSection = findViewById(R.id.pinSection)
         tvEmergencyPinToggle = findViewById(R.id.tvEmergencyPinToggle)
         pinInputContainer = findViewById(R.id.pinInputContainer)
@@ -84,6 +89,10 @@ class OverlayLockActivity : Activity() {
         setupPinOverride()
 
         btnGoHome.setOnClickListener {
+            goToHomeScreen()
+        }
+
+        btnCloseOverlay.setOnClickListener {
             goToHomeScreen()
         }
     }
@@ -185,20 +194,61 @@ class OverlayLockActivity : Activity() {
 
     private fun setupPinOverride() {
         tvEmergencyPinToggle.setOnClickListener {
-            pinInputContainer.visibility =
-                if (pinInputContainer.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+            val isCurrentlyVisible = pinInputContainer.visibility == View.VISIBLE
+            if (!isCurrentlyVisible) {
+                // Open PIN input: Pause auto-dismiss timer so user has unlimited time to type!
+                pinInputContainer.visibility = View.VISIBLE
+                countDownTimer?.cancel()
+                tvCountdownLabel.text = "PIN UNLOCK ACTIVE"
+                tvCountdown.text = "PAUSED"
+                etPin.requestFocus()
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                imm?.showSoftInput(etPin, InputMethodManager.SHOW_IMPLICIT)
+            } else {
+                // Close PIN input: restart auto-dismiss countdown
+                pinInputContainer.visibility = View.GONE
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                imm?.hideSoftInputFromWindow(etPin.windowToken, 0)
+                startAutoDismissTimer(5)
+            }
         }
 
         btnUnlockPin.setOnClickListener {
             val entered = etPin.text.toString().trim()
             if (entered == prefs.parentPin) {
+                failedPinAttempts = 0
                 prefs.unlockYouTubeEmergency()
                 prefs.resetGamesUsageEmergency()
                 countDownTimer?.cancel()
-                Toast.makeText(this, "Parent PIN accepted! Lock released.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Parent PIN accepted! Resuming YouTube...", Toast.LENGTH_SHORT).show()
+
+                // Seamlessly reopen YouTube directly
+                try {
+                    val ytIntent = packageManager.getLaunchIntentForPackage("com.google.android.youtube")?.apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    }
+                    if (ytIntent != null) {
+                        startActivity(ytIntent)
+                    }
+                } catch (e: Exception) {
+                    Log.e("OverlayLockActivity", "Error reopening YouTube: ${e.message}")
+                }
+
                 finish()
             } else {
-                Toast.makeText(this, "Incorrect PIN. Try again.", Toast.LENGTH_SHORT).show()
+                failedPinAttempts++
+                val remainingAttempts = 3 - failedPinAttempts
+                if (remainingAttempts > 0) {
+                    Toast.makeText(this, "Incorrect PIN. $remainingAttempts attempt(s) remaining.", Toast.LENGTH_SHORT).show()
+                    etPin.text.clear()
+                } else {
+                    Toast.makeText(this, "Maximum attempts reached. Returning to Home...", Toast.LENGTH_LONG).show()
+                    pinInputContainer.visibility = View.GONE
+                    val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                    imm?.hideSoftInputFromWindow(etPin.windowToken, 0)
+                    failedPinAttempts = 0
+                    startAutoDismissTimer(3)
+                }
             }
         }
     }
