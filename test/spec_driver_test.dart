@@ -43,6 +43,8 @@ void main() {
     String simulateScanAction({
       required bool isStudyZoneActive,
       required StudyScanType scannedType,
+      String? activeZoneName,
+      String? scannedZoneName,
     }) {
       if (!isStudyZoneActive) {
         // State: IDLE
@@ -54,6 +56,11 @@ void main() {
         // State: ACTIVE
         if (scannedType == StudyScanType.checkIn) {
           return 'SHOW_ALREADY_CHECKED_IN_INFO';
+        }
+        if (activeZoneName != null &&
+            scannedZoneName != null &&
+            activeZoneName.trim().toLowerCase() != scannedZoneName.trim().toLowerCase()) {
+          return 'SHOW_MISMATCHED_LIBRARY_WARNING';
         }
         return 'SHOW_CHECKOUT_CONFIRMATION';
       }
@@ -83,12 +90,24 @@ void main() {
       expect(action, equals('SHOW_ALREADY_CHECKED_IN_INFO'));
     });
 
-    test('Scanning Check-Out while ACTIVE must show Checkout Confirmation', () {
+    test('Scanning Check-Out from matching library while ACTIVE must show Checkout Confirmation', () {
       final action = simulateScanAction(
         isStudyZoneActive: true,
         scannedType: StudyScanType.checkOut,
+        activeZoneName: 'Jijau Library',
+        scannedZoneName: 'Jijau Library',
       );
       expect(action, equals('SHOW_CHECKOUT_CONFIRMATION'));
+    });
+
+    test('Scanning Check-Out from a DIFFERENT library must show Mismatched Library Warning', () {
+      final action = simulateScanAction(
+        isStudyZoneActive: true,
+        scannedType: StudyScanType.checkOut,
+        activeZoneName: 'Jijau Library',
+        scannedZoneName: 'City Central Library',
+      );
+      expect(action, equals('SHOW_MISMATCHED_LIBRARY_WARNING'));
     });
   });
 

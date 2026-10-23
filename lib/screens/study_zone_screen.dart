@@ -170,12 +170,50 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
           ),
         ],
       ),
+  void _showMismatchedLibraryDialog({required String scannedZone, required String activeZone}) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.wrong_location_outlined, color: Color(0xFFEF4444), size: 26),
+            SizedBox(width: 10),
+            Text('Different Library Poster', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'You are currently checked into "$activeZone", but you scanned the Exit poster for "$scannedZone"!\n\nPlease scan the Exit poster at "$activeZone" to release your session.',
+          style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF06B6D4),
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Understood', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
     );
   }
 
   Future<void> _handleScanExit([String? zone]) async {
     if (!_data.isStudyZoneActive) {
       _showNotCheckedInWarningDialog(zone ?? 'the library');
+      return;
+    }
+
+    // Verify student is checking out from the same library they checked into
+    if (zone != null &&
+        zone.trim().isNotEmpty &&
+        _data.studyZoneName.trim().isNotEmpty &&
+        zone.trim().toLowerCase() != _data.studyZoneName.trim().toLowerCase()) {
+      _showMismatchedLibraryDialog(scannedZone: zone.trim(), activeZone: _data.studyZoneName);
       return;
     }
 
