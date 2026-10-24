@@ -139,6 +139,7 @@ class MainActivity : FlutterActivity() {
                     val pin = call.argument<String>("pin") ?: ""
                     if (pin == prefs.parentPin) {
                         prefs.unlockYouTubeEmergency()
+                        prefs.resetGamesUsageEmergency()
                         try {
                             val dismissIntent = Intent("com.doomsblocker.ACTION_DISMISS_OVERLAY")
                             dismissIntent.setPackage(packageName)

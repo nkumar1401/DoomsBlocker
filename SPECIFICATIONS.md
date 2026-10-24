@@ -7,25 +7,29 @@ This document serves as the **Single Source of Truth (SSOT)** for DoomsBlocker. 
 ## 1. Core Operating Modes
 
 ### 1.1 Mode A: Adult Focus Mode
-* **Goal**: Stop doomscrolling on short-form feeds without blocking educational long-form videos.
-* **YouTube Invariants**:
-  * **Long-Form Videos**: 100% permitted. Lectures, news, documentaries, tutorials must play uninterrupted.
-  * **Shorts Player**: Strictly tracked. Every second in Shorts adds to `shortsUsedSecondsToday`.
-  * **Dynamic Threshold**: Limit is read dynamically from `prefs.shortsLimitMinutes * 60`. (Default: 5 min, selectable from 1 min to 180 min).
-  * **Lock Action**: When `usedSec >= limitSec`:
-    1. Immediately pause media audio (`KEYCODE_MEDIA_PAUSE`).
-    2. Display `OverlayLockActivity` with `REASON_SHORTS_LIMIT` for a smooth 5-second countdown popup.
-    3. Auto-dismiss to Phone Home Screen upon countdown expiry.
-    4. Maintain active lockout window for `prefs.shortsLockDurationMinutes` (e.g., 30m, 2h, 8h).
+* **Goal**: Stop doomscrolling on short-form feeds without blocking educational long-form videos or productive communication.
+* **Unified Short-Form Pool (YouTube Shorts & Instagram Reels)**:
+  * **Short-Form Tracking**: Time spent inside YouTube Shorts or Instagram Reels increments the shared `shortsUsedSecondsToday` pool.
+  * **Long-Form & Feed Exemption**: Long-form YouTube videos (lectures, tutorials, news) and normal Instagram feeds / direct messages are **100% permitted**.
+  * **Dynamic Threshold**: Shared limit is read dynamically from `prefs.shortsLimitMinutes * 60` (Default: 5 min).
+  * **Lock Action**: When `usedSec >= limitSec` or during active lockout window (`shortsLockDurationMinutes`):
+    1. Immediately pause media audio and request transient audio focus.
+    2. Exit the vertical short-form player (Shorts/Reels) via accessibility back action.
+    3. Display `OverlayLockActivity` with `REASON_SHORTS_LIMIT` for a smooth 5-second countdown popup.
+    4. Auto-dismiss to Phone Home Screen upon countdown expiry.
+  * **Blocked Channels**: Channels listed in `prefs.blockedChannels` are completely blocked (both long-form videos and shorts) using case-insensitive matching, triggering `OverlayLockActivity.REASON_CHANNEL_BLOCKED` and returning to Home.
   * **Nephew Mode Disabled**: PIN is not required for normal usage; parent PIN is strictly for Nephew Mode overrides.
 
 ### 1.2 Mode B: Nephew Guard Mode
-* **Goal**: Strict child screen-time limiter for YouTube and Games.
+* **Goal**: Strict child screen-time limiter for YouTube, Games, and Social Media.
 * **Invariants**:
   * **Total YouTube Block**: When locked or limit reached, locks the **entire** YouTube application (both Shorts and long-form).
   * **Restricted Apps / Games**: Measures total active screen time across all selected games.
   * **Daily Limit**: `gameLimitMinutes * 60` seconds. (Excludes phone Settings, System UI, Play Store, and Phone dialer).
-  * **Lock Action**: Immediate audio pause + `OverlayLockActivity` with `REASON_GAME_LIMIT` or `REASON_YOUTUBE_LOCKED`.
+  * **Smooth Game Lock Action**: When a game crosses its limit:
+    1. Silence background media and pause audio.
+    2. Display `OverlayLockActivity` with `REASON_GAME_LIMIT` for a smooth 5-second countdown popup.
+    3. Never trigger `GLOBAL_ACTION_HOME` concurrently with overlay start; allow the 5-second timer to auto-dismiss smoothly to Home.
   * **PIN Protection**: 4-digit Parent PIN (default: `1234`) is required to bypass or modify rules.
 
 ---

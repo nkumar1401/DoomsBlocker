@@ -1,14 +1,19 @@
 package com.doomsblocker.app
 
 import android.app.Activity
+import android.app.ActivityManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.util.Log
+import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
@@ -76,6 +81,7 @@ class OverlayLockActivity : Activity() {
         setContentView(R.layout.activity_overlay_lock)
 
         prefs = AppPreferences(this)
+        silenceMediaPlayback()
 
         val filter = IntentFilter("com.doomsblocker.ACTION_DISMISS_OVERLAY")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -130,8 +136,11 @@ class OverlayLockActivity : Activity() {
 
         when (reason) {
             REASON_SHORTS_LIMIT -> {
-                tvTitle.text = "YouTube Shorts Blocked"
-                tvMessage.text = "Shorts limit reached (${prefs.shortsLimitMinutes} min).\nShorts is locked for ${prefs.shortsLockDurationMinutes} min.\n(Long-form YouTube videos remain accessible)."
+                val isInstagram = targetPackage == "com.instagram.android"
+                tvTitle.text = if (isInstagram) "Instagram Reels Blocked" else "YouTube Shorts Blocked"
+                val source = if (isInstagram) "Reels" else "Shorts"
+                val longFormNote = if (isInstagram) "(Direct messages and feeds remain accessible)." else "(Long-form YouTube videos remain accessible)."
+                tvMessage.text = "$source limit reached (${prefs.shortsLimitMinutes} min).\n$source is locked for ${prefs.shortsLockDurationMinutes} min.\n$longFormNote"
                 // Smooth 5-second auto-dismiss to Home Screen
                 startAutoDismissTimer(5)
             }
@@ -292,8 +301,45 @@ class OverlayLockActivity : Activity() {
         }
     }
 
+    private fun silenceMediaPlayback() {
+        try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            if (audioManager != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                        .setAudioAttributes(
+                            AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build()
+                        )
+                        .build()
+                    audioManager.requestAudioFocus(focusRequest)
+                } else {
+                    @Suppress("DEPRECATION")
+                    audioManager.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                }
+
+                audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PAUSE))
+                audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PAUSE))
+                audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_STOP))
+                audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_STOP))
+            }
+        } catch (e: Exception) {
+            Log.e("OverlayLockActivity", "Error silencing media: ${e.message}")
+        }
+    }
+
     private fun goToHomeScreen() {
         countDownTimer?.cancel()
+        silenceMediaPlayback()
+        try {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            am?.killBackgroundProcesses("com.google.android.youtube")
+            targetPackage?.let { if (it != "com.google.android.youtube") am?.killBackgroundProcesses(it) }
+        } catch (e: Exception) {
+            Log.e("OverlayLockActivity", "Error killing background processes: ${e.message}")
+        }
         val homeIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_HOME)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED

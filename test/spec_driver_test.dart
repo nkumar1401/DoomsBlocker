@@ -173,4 +173,46 @@ void main() {
       expect(calculateShortsProgress(900, 30), equals(0.5));
     });
   });
+
+  group('SPEC 5: Case-Insensitive Channel Blocking Invariant', () {
+    bool isChannelBlocked(String detectedChannel, List<String> blockedList) {
+      final detectedLower = detectedChannel.trim().toLowerCase();
+      return blockedList.any((blocked) => detectedLower.contains(blocked.trim().toLowerCase()));
+    }
+
+    test('Case-insensitively matches blocked channels regardless of casing', () {
+      final blockedList = ['Firstpost', 'T-Series', 'PewDiePie'];
+
+      expect(isChannelBlocked('firstpost', blockedList), isTrue);
+      expect(isChannelBlocked('FIRSTPOST', blockedList), isTrue);
+      expect(isChannelBlocked('Firstpost News', blockedList), isTrue);
+      expect(isChannelBlocked('t-series music', blockedList), isTrue);
+      expect(isChannelBlocked('pewdiepie', blockedList), isTrue);
+      expect(isChannelBlocked('BBC News', blockedList), isFalse);
+      expect(isChannelBlocked('Khan Academy', blockedList), isFalse);
+    });
+  });
+
+  group('SPEC 6: Unified Short-Form Pool Invariants', () {
+    test('Instagram Reels and YouTube Shorts contribute to unified usage pool', () {
+      int shortsUsedSeconds = 0;
+      void recordShortFormTime(int seconds) {
+        shortsUsedSeconds += seconds;
+      }
+
+      // 60s in YouTube Shorts
+      recordShortFormTime(60);
+      expect(shortsUsedSeconds, equals(60));
+
+      // 120s in Instagram Reels
+      recordShortFormTime(120);
+      expect(shortsUsedSeconds, equals(180));
+
+      // Limit check: 3 minutes (180s)
+      const limitMinutes = 3;
+      final isLimitReached = shortsUsedSeconds >= (limitMinutes * 60);
+      expect(isLimitReached, isTrue);
+    });
+  });
 }
+

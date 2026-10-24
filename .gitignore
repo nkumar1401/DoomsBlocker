@@ -30,6 +30,7 @@ migrate_working_dir/
 /build/
 
 # Android related
+**/android/build/
 **/android/**/gradle-wrapper.jar
 **/android/.gradle
 **/android/.kotlin

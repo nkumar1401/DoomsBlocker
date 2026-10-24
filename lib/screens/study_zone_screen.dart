@@ -170,6 +170,9 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
           ),
         ],
       ),
+    );
+  }
+
   void _showMismatchedLibraryDialog({required String scannedZone, required String activeZone}) {
     showDialog<void>(
       context: context,

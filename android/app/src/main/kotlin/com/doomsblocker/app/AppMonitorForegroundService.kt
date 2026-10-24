@@ -108,11 +108,22 @@ class AppMonitorForegroundService : Service() {
             // In Adult Mode, normal YouTube app & longform video are permitted; Shorts is strictly blocked by AccessibilityService!
         }
 
-        // 2. Restricted apps & games check & Study Zone Enforcement
-        if (prefs.restrictedApps.contains(fgPackage) || isSocialOrDistractionApp(fgPackage)) {
+        // 2. Study Zone distraction apps check
+        if (prefs.isStudyZoneActive && isSocialOrDistractionApp(fgPackage)) {
+            Log.w(TAG, "Study Zone Active: Distraction app $fgPackage blocked during study hours!")
+            OverlayLockActivity.start(
+                this,
+                OverlayLockActivity.REASON_STUDY_ZONE,
+                prefs.studyZoneName,
+                fgPackage
+            )
+            return
+        }
+
+        // 3. Restricted apps & games check
+        if (prefs.restrictedApps.contains(fgPackage)) {
             if (prefs.isStudyZoneActive) {
-                Log.w(TAG, "Study Zone Active: Foreground app $fgPackage is blocked during study hours! Ejecting...")
-                ejectToHome(fgPackage)
+                Log.w(TAG, "Study Zone Active: Restricted game $fgPackage blocked during study hours!")
                 OverlayLockActivity.start(
                     this,
                     OverlayLockActivity.REASON_STUDY_ZONE,
@@ -122,25 +133,22 @@ class AppMonitorForegroundService : Service() {
                 return
             }
 
-            if (prefs.restrictedApps.contains(fgPackage)) {
-                if (deltaSeconds > 0) {
-                    prefs.addAppUsageSeconds(fgPackage, deltaSeconds)
-                }
+            if (deltaSeconds > 0) {
+                prefs.addAppUsageSeconds(fgPackage, deltaSeconds)
+            }
 
-                val appUsedSeconds = prefs.getAppUsageSeconds(fgPackage)
-                val totalUsedSeconds = prefs.getTotalRestrictedAppsUsageSeconds()
-                val limitSeconds = prefs.gameLimitMinutes * 60
+            val appUsedSeconds = prefs.getAppUsageSeconds(fgPackage)
+            val totalUsedSeconds = prefs.getTotalRestrictedAppsUsageSeconds()
+            val limitSeconds = prefs.gameLimitMinutes * 60
 
-                if (totalUsedSeconds >= limitSeconds || appUsedSeconds >= limitSeconds) {
-                    Log.w(TAG, "Restricted app limit reached ($appUsedSeconds s used / $limitSeconds s limit). Locking...")
-                    ejectToHome(fgPackage)
-                    OverlayLockActivity.start(
-                        this,
-                        OverlayLockActivity.REASON_GAME_LIMIT,
-                        getAppLabel(fgPackage),
-                        fgPackage
-                    )
-                }
+            if (totalUsedSeconds >= limitSeconds || appUsedSeconds >= limitSeconds) {
+                Log.w(TAG, "Restricted game limit reached ($appUsedSeconds s used / $limitSeconds s limit). Showing lock overlay...")
+                OverlayLockActivity.start(
+                    this,
+                    OverlayLockActivity.REASON_GAME_LIMIT,
+                    getAppLabel(fgPackage),
+                    fgPackage
+                )
             }
         }
     }
@@ -230,15 +238,30 @@ class AppMonitorForegroundService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val isLocked = prefs.isYouTubeLocked
+        val isStudyZone = prefs.isStudyZoneActive
+        val isLocked = prefs.isYouTubeLocked || isStudyZone
+        val smallIcon = if (isLocked) R.drawable.ic_notification_locked else R.drawable.ic_notification_unlocked
+
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_lock_lock)
+            .setSmallIcon(smallIcon)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
 
-        if (isLocked) {
+        if (isStudyZone) {
+            val expire = prefs.studyZoneExpireTimestamp
+            val remainingSec = ((expire - System.currentTimeMillis()) / 1000).toInt().coerceAtLeast(0)
+            val minutes = remainingSec / 60
+            val seconds = remainingSec % 60
+            val timeFormatted = String.format(Locale.US, "%02d:%02d", minutes, seconds)
+
+            builder
+                .setContentTitle("📚 Study Zone Active • ${prefs.studyZoneName}")
+                .setContentText("Focus session in progress • $timeFormatted remaining (Distractions locked)")
+                .setColor(Color.parseColor("#EF4444"))
+                .addAction(android.R.drawable.ic_menu_preferences, "Study Dashboard", pendingIntent)
+        } else if (prefs.isYouTubeLocked) {
             val remainingMillis = prefs.youtubeLockUntilTimestamp - System.currentTimeMillis()
             val remainingSec = (remainingMillis / 1000).toInt().coerceAtLeast(0)
             val minutes = remainingSec / 60
@@ -258,7 +281,7 @@ class AppMonitorForegroundService : Service() {
             )
 
             builder
-                .setContentTitle("YouTube Shorts Locked • $timeFormatted remaining")
+                .setContentTitle("YouTube Shorts & Reels Locked • $timeFormatted remaining")
                 .setContentText("Locked for ${prefs.shortsLockDurationMinutes}m after reaching limit")
                 .setProgress(totalLockoutSec, remainingSec, false)
                 .setColor(Color.parseColor("#EF4444"))
@@ -273,7 +296,7 @@ class AppMonitorForegroundService : Service() {
             val modeText = if (prefs.isNephewModeEnabled) {
                 "Nephew Guard ON • Strict child protection active"
             } else {
-                "Adult Mode • Shorts restricted to ${prefs.shortsLimitMinutes} min"
+                "Adult Mode • Shorts & Reels limit: ${prefs.shortsLimitMinutes} min"
             }
 
             builder
