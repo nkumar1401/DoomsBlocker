@@ -78,8 +78,11 @@ class AppPreferences(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_NEPHEW_MODE, value).apply()
 
     var parentPin: String
-        get() = prefs.getString(KEY_PARENT_PIN, "1234") ?: "1234"
+        get() = prefs.getString(KEY_PARENT_PIN, "") ?: ""
         set(value) = prefs.edit().putString(KEY_PARENT_PIN, value).apply()
+
+    val isPinSet: Boolean
+        get() = parentPin.isNotBlank()
 
     var gameLimitMinutes: Int
         get() = prefs.getInt(KEY_GAME_LIMIT_MINS, 20) // Default: 20 min game limit

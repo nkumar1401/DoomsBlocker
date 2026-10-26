@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/native_bridge.dart';
 import '../widgets/pin_dialog.dart';
+import '../widgets/create_pin_dialog.dart';
 
 class NephewModeScreen extends StatefulWidget {
   const NephewModeScreen({Key? key}) : super(key: key);
@@ -12,7 +13,6 @@ class NephewModeScreen extends StatefulWidget {
 class _NephewModeScreenState extends State<NephewModeScreen> {
   bool _isEnabled = false;
   bool _isLoading = true;
-  final TextEditingController _newPinController = TextEditingController();
 
   @override
   void initState() {
@@ -46,66 +46,26 @@ class _NephewModeScreenState extends State<NephewModeScreen> {
   }
 
   Future<void> _changePin() async {
-    final pinOk = await PinDialog.show(
-      context,
-      title: 'Verify Current PIN',
-      description: 'Enter your current 4-digit PIN before setting a new one.',
-    );
-    if (!pinOk) return;
+    final pinSet = await NativeBridge.isPinSet();
+    if (pinSet) {
+      final pinOk = await PinDialog.show(
+        context,
+        title: 'Verify Current PIN',
+        description: 'Enter your current 4-digit PIN before setting a new one.',
+      );
+      if (!pinOk) return;
+    }
 
     if (!mounted) return;
 
-    // Show dialog to enter new PIN
-    final newPin = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Set New 4-Digit PIN', style: TextStyle(color: Colors.white)),
-        content: TextField(
-          controller: _newPinController,
-          keyboardType: TextInputType.number,
-          maxLength: 4,
-          obscureText: true,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: Colors.white, fontSize: 24, letterSpacing: 8),
-          decoration: const InputDecoration(
-            hintText: '••••',
-            hintStyle: TextStyle(color: Color(0xFF64748B)),
-            counterText: '',
-          ),
+    final created = await CreatePinDialog.show(context);
+    if (created && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Parent PIN updated successfully!'),
+          backgroundColor: Color(0xFF10B981),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(null),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF94A3B8))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
-            onPressed: () {
-              final pin = _newPinController.text.trim();
-              if (pin.length == 4) {
-                Navigator.of(ctx).pop(pin);
-              }
-            },
-            child: const Text('Save PIN', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    _newPinController.clear();
-
-    if (newPin != null && newPin.length == 4) {
-      await NativeBridge.setNephewMode(enabled: _isEnabled, pin: newPin);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Parent PIN updated successfully!'),
-            backgroundColor: Color(0xFF10B981),
-          ),
-        );
-      }
+      );
     }
   }
 

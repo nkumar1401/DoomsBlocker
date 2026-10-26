@@ -75,6 +75,10 @@ This document serves as the **Single Source of Truth (SSOT)** for DoomsBlocker. 
    * Presets: 30m, 45m, 1h, 2h, 3h, 4h, 6h, 8h, 10h, 12h.
    * Slider: 15m to 12 Hours (15-minute increments).
    * Custom Time Input: Type any exact hours and minutes up to 24 Hours (e.g., 10h 30m).
+6. **Permanent Physical QR Poster Guarantee (Forward-Compatibility Invariant)**:
+   * Physical posters printed and pasted at the reception desk (`DOOMSBLOCKER_STUDY:IN:<zoneName>` and `DOOMSBLOCKER_STUDY:OUT:<zoneName>`) are **Permanent and Immutable**.
+   * Library managers print the 2 posters **once**. The posters will continue to scan and function identically across all future Google Play Store updates of DoomsBlocker without ever requiring re-printing or poster replacement.
+   * Scanner parsers must permanently guarantee whitespace trimming, protocol case-insensitivity, and robust zone name extraction.
 
 ---
 
@@ -94,3 +98,25 @@ This document serves as the **Single Source of Truth (SSOT)** for DoomsBlocker. 
 ## 4. UI Design & Scanner Standards
 * **Camera Viewfinder**: Must use hardware-accelerated `CustomPainter` with `PathOperation.difference` to ensure a 100% clear transparent cutout window. Never use GPU blend-mode masks that glitch to solid red.
 * **All Numbers Dynamic**: Every time rule, limit, and duration must be read from `SharedPreferences` / `NativeBridge`. Zero hardcoding.
+
+---
+
+## 5. Security Architecture (Google Pay-Style Session Authentication)
+
+### 5.1 First-Time PIN Setup (Zero Hardcoded Default PIN)
+* **Initial State**: Fresh installations start with no PIN configured (`isPinSet == false`). The legacy default PIN (`1234`) is deprecated.
+* **On-Demand Creation**: The first time any protected feature (Shorts Rules, Blocked Channels, App Limits, Nephew Guard toggle, or Security PIN) is accessed, an intuitive 2-step setup dialog prompts the user to create and confirm their custom 4-digit PIN.
+* **Storage**: Saved securely in `AppPreferences` via `NativeBridge.setPin(newPin)`.
+
+### 5.2 Google Pay-Style Session Lifecycle
+* **Single Unlock Per Session**: Once the user unlocks any protected section, the entire Control Panel stays authenticated in memory. Users can freely move between Shorts Rules, Blocked Channels, and App Limits without repetitive PIN prompts.
+* **1-Minute Background Relock**:
+  * When the app is in the foreground, the session remains active.
+  * When the app moves to background (`paused` / `inactive`), the exit timestamp is recorded.
+  * If the app is resumed after $\ge 60$ seconds, the session immediately relocks.
+  * Explicit app termination or task swipe immediately invalidates the session.
+
+### 5.3 Library Study Zone PIN-Free Exemption Invariant
+* **Student Ergonomics**: The Library Study Zone is an educational productivity tool for students.
+* **Absolute Exemption**: QR scanning, checking into a library, picking a focus goal, viewing active study timers, and scanning the Exit poster must **never** prompt for a PIN.
+

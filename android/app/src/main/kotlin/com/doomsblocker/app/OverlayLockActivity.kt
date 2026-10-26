@@ -243,7 +243,7 @@ class OverlayLockActivity : Activity() {
 
         btnUnlockPin.setOnClickListener {
             val entered = etPin.text.toString().trim()
-            if (entered == prefs.parentPin) {
+            if (prefs.isPinSet && entered == prefs.parentPin) {
                 failedPinAttempts = 0
                 prefs.unlockYouTubeEmergency()
                 prefs.resetGamesUsageEmergency()

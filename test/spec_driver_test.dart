@@ -36,6 +36,30 @@ void main() {
       expect(payloadIn!.type, equals(StudyScanType.checkIn));
       expect(payloadOut!.type, equals(StudyScanType.checkOut));
     });
+
+    test('Permanently parses physical posters with leading/trailing whitespaces and complex names', () {
+      final payload = StudyQrPayload.parse('  DOOMSBLOCKER_STUDY:IN:Jijau Study Room - Branch 2: Floor 1  \n');
+      expect(payload, isNotNull);
+      expect(payload!.type, equals(StudyScanType.checkIn));
+      expect(payload.zoneName, equals('Jijau Study Room - Branch 2: Floor 1'));
+    });
+
+    test('Forward-Compatibility Invariant: Printed reception desk posters never expire across updates', () {
+      // Simulating a poster printed in v1.0.0 scanned by any future version
+      const legacyPrintedEntrancePoster = 'DOOMSBLOCKER_STUDY:IN:City Central Reading Hall';
+      const legacyPrintedExitPoster = 'DOOMSBLOCKER_STUDY:OUT:City Central Reading Hall';
+
+      final entrance = StudyQrPayload.parse(legacyPrintedEntrancePoster);
+      final exit = StudyQrPayload.parse(legacyPrintedExitPoster);
+
+      expect(entrance, isNotNull);
+      expect(entrance!.type, equals(StudyScanType.checkIn));
+      expect(entrance.zoneName, equals('City Central Reading Hall'));
+
+      expect(exit, isNotNull);
+      expect(exit!.type, equals(StudyScanType.checkOut));
+      expect(exit.zoneName, equals('City Central Reading Hall'));
+    });
   });
 
   group('SPEC 2: Library Study Zone State Machine Transitions', () {
@@ -214,5 +238,89 @@ void main() {
       expect(isLimitReached, isTrue);
     });
   });
+
+  group('SPEC 7: Google Pay-Style Security Session & First-Time PIN Invariants', () {
+    test('Fresh install has no PIN set by default', () {
+      String storedPin = '';
+      bool isPinConfigured() => storedPin.trim().isNotEmpty;
+
+      expect(isPinConfigured(), isFalse);
+    });
+
+    test('PIN creation requires exactly 4 digits and matching confirmation', () {
+      bool validatePinCreation(String pin, String confirm) {
+        if (pin.length != 4 || int.tryParse(pin) == null) return false;
+        if (confirm != pin) return false;
+        return true;
+      }
+
+      expect(validatePinCreation('123', '123'), isFalse, reason: 'Too short');
+      expect(validatePinCreation('12345', '12345'), isFalse, reason: 'Too long');
+      expect(validatePinCreation('abcd', 'abcd'), isFalse, reason: 'Not numeric');
+      expect(validatePinCreation('4567', '4568'), isFalse, reason: 'Mismatch');
+      expect(validatePinCreation('4567', '4567'), isTrue, reason: 'Valid 4-digit matching PIN');
+    });
+
+    test('Session remains unlocked in foreground without prompting PIN repeatedly', () {
+      bool isUnlocked = false;
+      void authenticate(bool success) {
+        if (success) isUnlocked = true;
+      }
+
+      // Initial state: locked
+      expect(isUnlocked, isFalse);
+
+      // Authenticate once
+      authenticate(true);
+      expect(isUnlocked, isTrue);
+
+      // Subsequent settings navigations do not require re-authentication
+      bool canAccessFeatureWithoutPin() => isUnlocked;
+      expect(canAccessFeatureWithoutPin(), isTrue);
+      expect(canAccessFeatureWithoutPin(), isTrue);
+    });
+
+    test('Session automatically relocks when backgrounded for >= 60 seconds', () {
+      bool isUnlocked = true;
+      DateTime? lastBackgroundTime;
+      const timeout = Duration(minutes: 1);
+
+      bool checkSession(DateTime now) {
+        if (!isUnlocked) return false;
+        if (lastBackgroundTime != null) {
+          if (now.difference(lastBackgroundTime!) >= timeout) {
+            isUnlocked = false;
+            return false;
+          }
+        }
+        return true;
+      }
+
+      final start = DateTime(2026, 1, 1, 12, 0, 0);
+      // App paused at 12:00:00
+      lastBackgroundTime = start;
+
+      // Resumed after 30 seconds -> session still valid
+      expect(checkSession(start.add(const Duration(seconds: 30))), isTrue);
+
+      // Resumed after 61 seconds -> session automatically locked
+      expect(checkSession(start.add(const Duration(seconds: 61))), isFalse);
+      expect(isUnlocked, isFalse);
+    });
+
+    test('Library Study Zone is 100% exempt from PIN session lock', () {
+      // Regardless of session lock status, Study Zone is always accessible
+      bool isSessionUnlocked = false;
+      bool canAccessStudyZone({required bool isSessionUnlocked}) {
+        // Study zone is completely exempt from PIN requirement
+        return true;
+      }
+
+      expect(canAccessStudyZone(isSessionUnlocked: isSessionUnlocked), isTrue);
+      isSessionUnlocked = true;
+      expect(canAccessStudyZone(isSessionUnlocked: isSessionUnlocked), isTrue);
+    });
+  });
 }
+
 

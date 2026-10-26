@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/dashboard_data.dart';
 import '../services/native_bridge.dart';
+import '../services/session_security_service.dart';
 import '../widgets/pin_dialog.dart';
 import 'shorts_settings_screen.dart';
 import 'game_limits_screen.dart';
@@ -18,7 +19,7 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingObserver {
   DashboardData _data = DashboardData.initial();
   bool _isLoading = true;
   Timer? _refreshTimer;
@@ -31,6 +32,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadData();
     _refreshTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       _loadData(silent: true);
@@ -39,8 +41,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    SessionSecurityService.instance.handleLifecycleChange(state);
   }
 
   Future<void> _loadData({bool silent = false}) async {
@@ -674,14 +682,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             activeColor: const Color(0xFF10B981),
             activeTrackColor: const Color(0xFF10B981).withOpacity(0.4),
             onChanged: (val) async {
-              if (!val) {
-                final pinOk = await PinDialog.show(
-                  context,
-                  title: 'Turn Off Nephew Mode',
-                  description: 'Enter your 4-digit Parent PIN to disable nephew restrictions.',
-                );
-                if (!pinOk) return;
-              }
+              final ok = await SessionSecurityService.instance.authenticate(
+                context,
+                reason: val
+                    ? 'Enter PIN to activate Nephew Guard mode.'
+                    : 'Enter PIN to disable Nephew Guard mode.',
+              );
+              if (!ok) return;
+
               await NativeBridge.setNephewMode(enabled: val);
               _loadData();
             },
@@ -702,7 +710,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 iconColor: const Color(0xFF06B6D4),
                 title: 'Shorts Rules',
                 subtitle: '${_data.shortsLimitMinutes}m limit',
-                onTap: () {
+                onTap: () async {
+                  final ok = await SessionSecurityService.instance.authenticate(
+                    context,
+                    reason: 'Enter PIN to modify Shorts Doomscrolling Rules.',
+                  );
+                  if (!ok || !context.mounted) return;
                   Navigator.of(context)
                       .push(MaterialPageRoute(builder: (_) => const ShortsSettingsScreen()))
                       .then((_) => _loadData());
@@ -716,7 +729,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 iconColor: const Color(0xFFF43F5E),
                 title: 'Blocked Channels',
                 subtitle: '${_data.blockedChannelsCount} restricted',
-                onTap: () {
+                onTap: () async {
+                  final ok = await SessionSecurityService.instance.authenticate(
+                    context,
+                    reason: 'Enter PIN to manage Blocked Channels.',
+                  );
+                  if (!ok || !context.mounted) return;
                   Navigator.of(context)
                       .push(MaterialPageRoute(builder: (_) => const BlockedChannelsScreen()))
                       .then((_) => _loadData());
@@ -734,7 +752,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 iconColor: const Color(0xFF8B5CF6),
                 title: 'App Limits',
                 subtitle: '${_data.restrictedAppsCount} games',
-                onTap: () {
+                onTap: () async {
+                  final ok = await SessionSecurityService.instance.authenticate(
+                    context,
+                    reason: 'Enter PIN to manage App & Game Limits.',
+                  );
+                  if (!ok || !context.mounted) return;
                   Navigator.of(context)
                       .push(MaterialPageRoute(builder: (_) => const GameLimitsScreen()))
                       .then((_) => _loadData());
@@ -747,8 +770,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 icon: Icons.lock_rounded,
                 iconColor: const Color(0xFF10B981),
                 title: 'Security PIN',
-                subtitle: 'Parent PIN',
-                onTap: () {
+                subtitle: _data.isPinSet ? 'Parent PIN Set' : 'Set PIN Now',
+                onTap: () async {
+                  final ok = await SessionSecurityService.instance.authenticate(
+                    context,
+                    reason: 'Enter PIN to access Security PIN settings.',
+                  );
+                  if (!ok || !context.mounted) return;
                   Navigator.of(context)
                       .push(MaterialPageRoute(builder: (_) => const NephewModeScreen()))
                       .then((_) => _loadData());

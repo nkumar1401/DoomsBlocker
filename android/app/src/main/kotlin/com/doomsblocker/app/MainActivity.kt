@@ -50,7 +50,8 @@ class MainActivity : FlutterActivity() {
                         "blockedChannelsCount" to prefs.blockedChannels.size,
                         "isStudyZoneActive" to prefs.isStudyZoneActive,
                         "studyZoneName" to prefs.studyZoneName,
-                        "studyZoneRemainingSeconds" to prefs.studyZoneRemainingSeconds
+                        "studyZoneRemainingSeconds" to prefs.studyZoneRemainingSeconds,
+                        "isPinSet" to prefs.isPinSet
                     )
                     result.success(data)
                 }
@@ -130,14 +131,28 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                "isPinSet" -> {
+                    result.success(prefs.isPinSet)
+                }
+
+                "setPin" -> {
+                    val pin = call.argument<String>("pin")
+                    if (!pin.isNullOrBlank() && pin.trim().length == 4) {
+                        prefs.parentPin = pin.trim()
+                        result.success(true)
+                    } else {
+                        result.error("INVALID_ARGS", "PIN must be 4 digits", null)
+                    }
+                }
+
                 "verifyPin" -> {
                     val pin = call.argument<String>("pin") ?: ""
-                    result.success(pin == prefs.parentPin)
+                    result.success(prefs.isPinSet && pin == prefs.parentPin)
                 }
 
                 "emergencyUnlockYouTube" -> {
                     val pin = call.argument<String>("pin") ?: ""
-                    if (pin == prefs.parentPin) {
+                    if (prefs.isPinSet && pin == prefs.parentPin) {
                         prefs.unlockYouTubeEmergency()
                         prefs.resetGamesUsageEmergency()
                         try {

@@ -11,6 +11,7 @@ class DashboardData {
   final bool isStudyZoneActive;
   final String studyZoneName;
   final int studyZoneRemainingSeconds;
+  final bool isPinSet;
 
   DashboardData({
     required this.shortsLimitMinutes,
@@ -25,6 +26,7 @@ class DashboardData {
     required this.isStudyZoneActive,
     required this.studyZoneName,
     required this.studyZoneRemainingSeconds,
+    this.isPinSet = false,
   });
 
   factory DashboardData.fromMap(Map<dynamic, dynamic> map) {
@@ -41,6 +43,7 @@ class DashboardData {
       isStudyZoneActive: map['isStudyZoneActive'] as bool? ?? false,
       studyZoneName: map['studyZoneName'] as String? ?? 'Library Study Zone',
       studyZoneRemainingSeconds: (map['studyZoneRemainingSeconds'] as num?)?.toInt() ?? 0,
+      isPinSet: map['isPinSet'] as bool? ?? false,
     );
   }
 
@@ -58,6 +61,7 @@ class DashboardData {
       isStudyZoneActive: false,
       studyZoneName: 'Library Study Zone',
       studyZoneRemainingSeconds: 0,
+      isPinSet: false,
     );
   }
 }

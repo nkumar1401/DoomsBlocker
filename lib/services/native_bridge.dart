@@ -118,6 +118,24 @@ class NativeBridge {
     }
   }
 
+  static Future<bool> isPinSet() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('isPinSet');
+      return res ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<bool> setPin(String pin) async {
+    try {
+      final res = await _channel.invokeMethod<bool>('setPin', {'pin': pin});
+      return res ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   static Future<bool> verifyPin(String pin) async {
     try {
       final res = await _channel.invokeMethod<bool>('verifyPin', {'pin': pin});
