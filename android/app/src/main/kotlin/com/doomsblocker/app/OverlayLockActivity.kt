@@ -137,10 +137,12 @@ class OverlayLockActivity : Activity() {
         when (reason) {
             REASON_SHORTS_LIMIT -> {
                 val isInstagram = targetPackage == "com.instagram.android"
-                tvTitle.text = if (isInstagram) "Instagram Reels Blocked" else "YouTube Shorts Blocked"
-                val source = if (isInstagram) "Reels" else "Shorts"
-                val longFormNote = if (isInstagram) "(Direct messages and feeds remain accessible)." else "(Long-form YouTube videos remain accessible)."
-                tvMessage.text = "$source limit reached (${prefs.shortsLimitMinutes} min).\n$source is locked for ${prefs.shortsLockDurationMinutes} min.\n$longFormNote"
+                tvTitle.text = if (isInstagram) "Instagram Locked" else "YouTube Shorts Blocked"
+                tvMessage.text = if (isInstagram) {
+                    "Short-form limit reached (${prefs.shortsLimitMinutes} min).\nInstagram is locked for ${prefs.shortsLockDurationMinutes} min to prevent doomscrolling."
+                } else {
+                    "Shorts limit reached (${prefs.shortsLimitMinutes} min).\nShorts is locked for ${prefs.shortsLockDurationMinutes} min.\n(Long-form YouTube videos remain accessible)."
+                }
                 // Smooth 5-second auto-dismiss to Home Screen
                 startAutoDismissTimer(5)
             }

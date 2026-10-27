@@ -8,15 +8,16 @@ This document serves as the **Single Source of Truth (SSOT)** for DoomsBlocker. 
 
 ### 1.1 Mode A: Adult Focus Mode
 * **Goal**: Stop doomscrolling on short-form feeds without blocking educational long-form videos or productive communication.
-* **Unified Short-Form Pool (YouTube Shorts & Instagram Reels)**:
-  * **Short-Form Tracking**: Time spent inside YouTube Shorts or Instagram Reels increments the shared `shortsUsedSecondsToday` pool.
-  * **Long-Form & Feed Exemption**: Long-form YouTube videos (lectures, tutorials, news) and normal Instagram feeds / direct messages are **100% permitted**.
+* **Unified Short-Form Pool (YouTube Shorts & Instagram)**:
+  * **Short-Form Tracking**: Time spent inside YouTube Shorts or active inside Instagram (including home feed reels and the clips viewer) increments the shared `shortsUsedSecondsToday` pool.
+  * **YouTube Long-Form Exemption (Invariant 2)**: Long-form YouTube videos (lectures, tutorials, news, podcasts) are **100% permitted** and never locked.
   * **Dynamic Threshold**: Shared limit is read dynamically from `prefs.shortsLimitMinutes * 60` (Default: 5 min).
   * **Lock Action**: When `usedSec >= limitSec` or during active lockout window (`shortsLockDurationMinutes`):
     1. Immediately pause media audio and request transient audio focus.
-    2. Exit the vertical short-form player (Shorts/Reels) via accessibility back action.
-    3. Display `OverlayLockActivity` with `REASON_SHORTS_LIMIT` for a smooth 5-second countdown popup.
-    4. Auto-dismiss to Phone Home Screen upon countdown expiry.
+    2. In YouTube: Vertical short-form player is ejected/blocked, preserving educational long-form playback.
+    3. In Instagram: The entire Instagram application is locked to prevent home-feed reels doomscrolling.
+    4. Display `OverlayLockActivity` with `REASON_SHORTS_LIMIT` for a smooth 5-second countdown popup.
+    5. Auto-dismiss to Phone Home Screen upon countdown expiry.
   * **Blocked Channels**: Channels listed in `prefs.blockedChannels` are completely blocked (both long-form videos and shorts) using case-insensitive matching, triggering `OverlayLockActivity.REASON_CHANNEL_BLOCKED` and returning to Home.
   * **Nephew Mode Disabled**: PIN is not required for normal usage; parent PIN is strictly for Nephew Mode overrides.
 

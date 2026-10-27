@@ -430,29 +430,25 @@ class DoomsAccessibilityService : AccessibilityService() {
             return
         }
 
-        val rootNode = rootInActiveWindow ?: return
-        try {
-            val inReelsNow = detectInstagramReelsPresence(rootNode)
-            isInsideReels = inReelsNow
+        val now = System.currentTimeMillis()
+        val isShortFormLocked = prefs.youtubeLockUntilTimestamp > now ||
+            (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
 
-            val now = System.currentTimeMillis()
-            val isShortFormLocked = prefs.youtubeLockUntilTimestamp > now ||
-                (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
-
-            if (inReelsNow && isShortFormLocked) {
-                if (!canTriggerLockAction()) return
-                Log.d(TAG, "Reels active while short-form lockout is active! Showing smooth lock overlay...")
-                destroyBackgroundMediaAndPlayer(INSTAGRAM_PACKAGE)
-                dismissPictureInPictureIfPresent()
-                OverlayLockActivity.start(
-                    this,
-                    OverlayLockActivity.REASON_SHORTS_LIMIT,
-                    targetPackage = INSTAGRAM_PACKAGE
-                )
-            }
-        } finally {
-            rootNode.recycle()
+        if (isShortFormLocked) {
+            if (!canTriggerLockAction()) return
+            Log.d(TAG, "Instagram opened while short-form lockout is active! Showing smooth lock overlay...")
+            destroyBackgroundMediaAndPlayer(INSTAGRAM_PACKAGE)
+            dismissPictureInPictureIfPresent()
+            OverlayLockActivity.start(
+                this,
+                OverlayLockActivity.REASON_SHORTS_LIMIT,
+                targetPackage = INSTAGRAM_PACKAGE
+            )
+            return
         }
+
+        // Active tracking for Instagram (home feed reels & clips viewer)
+        isInsideReels = true
     }
 
     private fun handleStudyZoneDistractionEvent(pkgName: String) {
@@ -554,11 +550,20 @@ class DoomsAccessibilityService : AccessibilityService() {
         } else if (windowPkg == INSTAGRAM_PACKAGE) {
             activePackage = INSTAGRAM_PACKAGE
             isInsideShorts = false
-            if (rootNode != null) {
-                try {
-                    isInsideReels = detectInstagramReelsPresence(rootNode)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error in detectInstagramReelsPresence: ${e.message}")
+            isInsideReels = true
+
+            val isShortFormLocked = prefs.youtubeLockUntilTimestamp > now ||
+                (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
+            if (isShortFormLocked) {
+                if (canTriggerLockAction()) {
+                    Log.d(TAG, "Periodic tick: Instagram active during short-form lockout! Showing lock overlay...")
+                    destroyBackgroundMediaAndPlayer(INSTAGRAM_PACKAGE)
+                    dismissPictureInPictureIfPresent()
+                    OverlayLockActivity.start(
+                        this,
+                        OverlayLockActivity.REASON_SHORTS_LIMIT,
+                        targetPackage = INSTAGRAM_PACKAGE
+                    )
                 }
             }
         } else {

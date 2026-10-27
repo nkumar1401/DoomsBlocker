@@ -228,7 +228,7 @@ void main() {
       recordShortFormTime(60);
       expect(shortsUsedSeconds, equals(60));
 
-      // 120s in Instagram Reels
+      // 120s in Instagram (home feed reels or reels tab)
       recordShortFormTime(120);
       expect(shortsUsedSeconds, equals(180));
 
@@ -236,6 +236,36 @@ void main() {
       const limitMinutes = 3;
       final isLimitReached = shortsUsedSeconds >= (limitMinutes * 60);
       expect(isLimitReached, isTrue);
+    });
+
+    test('During cooldown lockout: Instagram is fully locked while YouTube long-form is permitted', () {
+      bool isShortFormLocked = true;
+
+      bool shouldLockPackage({
+        required String packageName,
+        required bool isInsideShorts,
+        required bool isLocked,
+      }) {
+        if (!isLocked) return false;
+        if (packageName == 'com.instagram.android') {
+          // Instagram is fully locked during cooldown to prevent home feed reels doomscrolling
+          return true;
+        }
+        if (packageName == 'com.google.android.youtube') {
+          // In YouTube, ONLY vertical Shorts are locked; educational long-form is permitted
+          return isInsideShorts;
+        }
+        return false;
+      }
+
+      // Instagram is completely locked
+      expect(shouldLockPackage(packageName: 'com.instagram.android', isInsideShorts: false, isLocked: isShortFormLocked), isTrue);
+
+      // YouTube Shorts is locked
+      expect(shouldLockPackage(packageName: 'com.google.android.youtube', isInsideShorts: true, isLocked: isShortFormLocked), isTrue);
+
+      // YouTube Long-Form (lecture/tutorial) is 100% permitted
+      expect(shouldLockPackage(packageName: 'com.google.android.youtube', isInsideShorts: false, isLocked: isShortFormLocked), isFalse);
     });
   });
 
