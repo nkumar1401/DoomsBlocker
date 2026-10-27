@@ -120,3 +120,15 @@ This document serves as the **Single Source of Truth (SSOT)** for DoomsBlocker. 
 * **Student Ergonomics**: The Library Study Zone is an educational productivity tool for students.
 * **Absolute Exemption**: QR scanning, checking into a library, picking a focus goal, viewing active study timers, and scanning the Exit poster must **never** prompt for a PIN.
 
+---
+
+## 6. Future Roadmap (v2.0 Post-Launch Specifications)
+
+### 6.1 Optional Cloud Backup & Cross-Device Sync
+* **Launch Stance**: Version 1.0 launches as a 100% offline, zero-data-collection application to ensure instant Google Play review approval and frictionless student/user adoption.
+* **v2.0 Authentication Provider**: Google 1-Tap Sign-In (native Android credential manager). Zero SMS gateway bills and instant 1-tap setup.
+* **Opt-In Architecture**: 
+  * The app remains completely usable without an account.
+  * Users may optionally link their Google account from Settings to backup study streaks, restore blocked channel lists, and sync rules when switching phones.
+
+
