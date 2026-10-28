@@ -21,7 +21,7 @@ This document serves as the **Single Source of Truth (SSOT)** for DoomsBlocker. 
     3. In Instagram: The entire Instagram application is locked to prevent home-feed reels doomscrolling.
     4. Display `OverlayLockActivity` with `REASON_SHORTS_LIMIT` for a smooth 5-second countdown popup.
     5. Auto-dismiss to Phone Home Screen upon countdown expiry.
-  * **Blocked Channels**: Channels listed in `prefs.blockedChannels` are completely blocked (both long-form videos and shorts) using case-insensitive matching, triggering `OverlayLockActivity.REASON_CHANNEL_BLOCKED` and returning to Home.
+  * **Blocked Channels**: Channels listed in `prefs.blockedChannels` are strictly blocked whenever a video from that channel plays (both long-form videos and shorts) using case-insensitive matching across channel names, handles (e.g. `@Firstpost`), avatars, and video metadata, triggering `OverlayLockActivity.REASON_CHANNEL_BLOCKED` and auto-dismissing to Home. Search results browsing is permitted until a video from the blocked channel is opened.
   * **Cooldown Expiration & Scroll Time Reset Invariant**:
     * When the configured cooldown lockout window finishes (`System.currentTimeMillis() >= youtubeLockUntilTimestamp`), the lockout timestamp is cleared and `shortsUsedSecondsToday` automatically resets to 0.
     * The user receives a fresh scroll time allowance for their new session without re-triggering the lockout.

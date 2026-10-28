@@ -154,7 +154,13 @@ class DoomsAccessibilityService : AccessibilityService() {
     private val channelNameViewIds = listOf(
         "com.google.android.youtube:id/channel_name",
         "com.google.android.youtube:id/owner_name",
-        "com.google.android.youtube:id/channel_title"
+        "com.google.android.youtube:id/channel_title",
+        "com.google.android.youtube:id/video_owner",
+        "com.google.android.youtube:id/collapsed_metadata",
+        "com.google.android.youtube:id/expandable_metadata",
+        "com.google.android.youtube:id/metadata_line",
+        "com.google.android.youtube:id/byline",
+        "com.google.android.youtube:id/channel_avatar"
     )
 
     private val instagramReelsViewIds = listOf(
@@ -565,33 +571,79 @@ class DoomsAccessibilityService : AccessibilityService() {
         val blockedList = prefs.blockedChannels
         if (blockedList.isEmpty()) return
 
-        for (id in channelNameViewIds) {
-            val nodes = root.findAccessibilityNodeInfosByViewId(id)
-            if (!nodes.isNullOrEmpty()) {
-                for (node in nodes) {
-                    val text = node.text?.toString()?.trim()
-                    if (!text.isNullOrEmpty()) {
-                        for (blocked in blockedList) {
-                            if (text.contains(blocked, ignoreCase = true)) {
-                                if (!canTriggerLockAction()) return
-                                Log.w(TAG, "Blocked channel detected: $text! Showing smooth lock overlay...")
-                                destroyBackgroundMediaAndPlayer(YOUTUBE_PACKAGE)
-                                dismissPictureInPictureIfPresent()
-                                OverlayLockActivity.start(
-                                    this,
-                                    OverlayLockActivity.REASON_CHANNEL_BLOCKED,
-                                    blocked,
-                                    YOUTUBE_PACKAGE
-                                )
-                                nodes.forEach { it.recycle() }
+        // Only enforce channel blocking when actively playing a video (watch player active) or inside Shorts
+        val isWatchingVideo = isWatchPlayerActive(root) || isInsideShorts
+        if (!isWatchingVideo) return
+
+        for (rawBlocked in blockedList) {
+            val blocked = rawBlocked.trim().removePrefix("@").lowercase(Locale.US)
+            if (blocked.isEmpty()) continue
+
+            // 1. Text & ContentDescription search: matches channel handles (@Firstpost),
+            // avatars, subscribe buttons ("Subscribe to Firstpost"), or metadata lines
+            val matches = root.findAccessibilityNodeInfosByText(blocked)
+            if (!matches.isNullOrEmpty()) {
+                for (node in matches) {
+                    if (node.isVisibleToUser) {
+                        val resId = node.viewIdResourceName?.lowercase(Locale.US) ?: ""
+                        if (!resId.contains("comment")) {
+                            val text = (node.text?.toString() ?: "").lowercase(Locale.US)
+                            val desc = (node.contentDescription?.toString() ?: "").lowercase(Locale.US)
+
+                            val isChannelIdentifier = resId.contains("channel") ||
+                                    resId.contains("owner") ||
+                                    resId.contains("byline") ||
+                                    resId.contains("metadata") ||
+                                    resId.contains("sub") ||
+                                    resId.contains("avatar") ||
+                                    text.startsWith("@$blocked") ||
+                                    text.contains("@$blocked") ||
+                                    text == blocked ||
+                                    desc.contains("subscribe to $blocked") ||
+                                    desc.contains("go to channel $blocked") ||
+                                    desc.contains(blocked)
+
+                            if (isChannelIdentifier) {
+                                triggerChannelLock(rawBlocked)
+                                matches.forEach { it.recycle() }
                                 return
                             }
                         }
                     }
                 }
-                nodes.forEach { it.recycle() }
+                matches.forEach { it.recycle() }
+            }
+
+            // 2. Direct view ID search across known YouTube channel layout IDs
+            for (id in channelNameViewIds) {
+                val nodes = root.findAccessibilityNodeInfosByViewId(id)
+                if (!nodes.isNullOrEmpty()) {
+                    for (node in nodes) {
+                        val text = node.text?.toString()?.trim()?.lowercase(Locale.US) ?: ""
+                        val desc = node.contentDescription?.toString()?.trim()?.lowercase(Locale.US) ?: ""
+                        if (text.contains(blocked) || desc.contains(blocked)) {
+                            triggerChannelLock(rawBlocked)
+                            nodes.forEach { it.recycle() }
+                            return
+                        }
+                    }
+                    nodes.forEach { it.recycle() }
+                }
             }
         }
+    }
+
+    private fun triggerChannelLock(channelName: String) {
+        if (!canTriggerLockAction()) return
+        Log.w(TAG, "Blocked channel detected: $channelName! Showing smooth lock overlay...")
+        destroyBackgroundMediaAndPlayer(YOUTUBE_PACKAGE)
+        dismissPictureInPictureIfPresent()
+        OverlayLockActivity.start(
+            this,
+            OverlayLockActivity.REASON_CHANNEL_BLOCKED,
+            channelName,
+            YOUTUBE_PACKAGE
+        )
     }
 
     private fun handleRestrictedAppEvent(pkgName: String) {
@@ -640,8 +692,9 @@ class DoomsAccessibilityService : AccessibilityService() {
             if (rootNode != null) {
                 try {
                     isInsideShorts = detectShortsPresence(rootNode)
+                    checkAndBlockRestrictedChannels(rootNode)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error in detectShortsPresence: ${e.message}")
+                    Log.e(TAG, "Error in YouTube periodic tick: ${e.message}")
                 }
             }
         } else if (windowPkg == INSTAGRAM_PACKAGE) {

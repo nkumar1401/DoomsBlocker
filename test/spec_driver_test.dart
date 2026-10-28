@@ -199,21 +199,51 @@ void main() {
   });
 
   group('SPEC 5: Case-Insensitive Channel Blocking Invariant', () {
-    bool isChannelBlocked(String detectedChannel, List<String> blockedList) {
-      final detectedLower = detectedChannel.trim().toLowerCase();
-      return blockedList.any((blocked) => detectedLower.contains(blocked.trim().toLowerCase()));
+    bool isChannelBlocked({
+      required String detectedText,
+      required List<String> blockedList,
+      required bool isWatchingVideo,
+    }) {
+      if (!isWatchingVideo) return false;
+      final detectedLower = detectedText.trim().toLowerCase();
+      return blockedList.any((rawBlocked) {
+        final blocked = rawBlocked.trim().toLowerCase().replaceAll('@', '');
+        return detectedLower.contains(blocked);
+      });
     }
 
-    test('Case-insensitively matches blocked channels regardless of casing', () {
-      final blockedList = ['Firstpost', 'T-Series', 'PewDiePie'];
+    test('Case-insensitively matches blocked channels, handles (@Firstpost), and metadata lines when playing', () {
+      final blockedList = ['Firstpost', 'T-Series', 'PewDiePie', 'moneycontrol'];
 
-      expect(isChannelBlocked('firstpost', blockedList), isTrue);
-      expect(isChannelBlocked('FIRSTPOST', blockedList), isTrue);
-      expect(isChannelBlocked('Firstpost News', blockedList), isTrue);
-      expect(isChannelBlocked('t-series music', blockedList), isTrue);
-      expect(isChannelBlocked('pewdiepie', blockedList), isTrue);
-      expect(isChannelBlocked('BBC News', blockedList), isFalse);
-      expect(isChannelBlocked('Khan Academy', blockedList), isFalse);
+      // 1. Direct channel name when playing
+      expect(isChannelBlocked(detectedText: 'firstpost', blockedList: blockedList, isWatchingVideo: true), isTrue);
+      expect(isChannelBlocked(detectedText: 'FIRSTPOST', blockedList: blockedList, isWatchingVideo: true), isTrue);
+      expect(isChannelBlocked(detectedText: 'moneycontrol', blockedList: blockedList, isWatchingVideo: true), isTrue);
+
+      // 2. YouTube handle format (@Firstpost)
+      expect(isChannelBlocked(detectedText: '@Firstpost', blockedList: blockedList, isWatchingVideo: true), isTrue);
+
+      // 3. Modern YouTube watch page metadata line: "@Firstpost 10 likes 496 views..."
+      expect(isChannelBlocked(
+        detectedText: '@Firstpost 10 likes 496 views 57 min ago #tatamotors more',
+        blockedList: blockedList,
+        isWatchingVideo: true,
+      ), isTrue);
+
+      // 4. Subscribe button / avatar content description
+      expect(isChannelBlocked(detectedText: 'Subscribe to Firstpost', blockedList: blockedList, isWatchingVideo: true), isTrue);
+      expect(isChannelBlocked(detectedText: 'Go to channel Firstpost', blockedList: blockedList, isWatchingVideo: true), isTrue);
+
+      // 5. In search results (video NOT playing yet): permitted until opened
+      expect(isChannelBlocked(
+        detectedText: '@Firstpost',
+        blockedList: blockedList,
+        isWatchingVideo: false,
+      ), isFalse);
+
+      // 6. Unrestricted channels
+      expect(isChannelBlocked(detectedText: 'BBC News', blockedList: blockedList, isWatchingVideo: true), isFalse);
+      expect(isChannelBlocked(detectedText: 'Khan Academy', blockedList: blockedList, isWatchingVideo: true), isFalse);
     });
   });
 
