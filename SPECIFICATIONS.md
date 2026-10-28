@@ -10,7 +10,7 @@ This document serves as the **Single Source of Truth (SSOT)** for DoomsBlocker. 
 * **Goal**: Stop doomscrolling on short-form feeds without blocking educational long-form videos or productive communication.
 * **Unified Short-Form Pool (YouTube Shorts & Instagram)**:
   * **Short-Form Tracking**: Time spent inside YouTube Shorts or active inside Instagram (including home feed reels and the clips viewer) increments the shared `shortsUsedSecondsToday` pool.
-  * **YouTube Long-Form Exemption (Invariant 2)**: Long-form YouTube videos (lectures, tutorials, news, podcasts) are **100% permitted** and never locked.
+  * **YouTube Long-Form Exemption (Invariant 2)**: Long-form YouTube videos (lectures, tutorials, news, podcasts) and the YouTube Home Feed Overview (including inline feed video previews) are **100% permitted** and never locked or counted. Exiting from Shorts back to the Home Feed or opening a long-form video must immediately pause the Shorts scroll timer without requiring an app restart.
   * **Dynamic Threshold**: Shared limit is read dynamically from `prefs.shortsLimitMinutes * 60` (Default: 5 min).
   * **Lock Action**: When `usedSec >= limitSec` or during active lockout window (`shortsLockDurationMinutes`):
     1. Immediately pause media audio and request transient audio focus.

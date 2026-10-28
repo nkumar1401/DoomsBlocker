@@ -286,41 +286,107 @@ class DoomsAccessibilityService : AccessibilityService() {
     }
 
     private fun detectShortsPresence(root: AccessibilityNodeInfo): Boolean {
-        // 1. Direct layout ID matches for Shorts/Reel player
+        // 0. If user is in feed overview (home/subscriptions) or watching a long-form video (including inline preview), Shorts is FALSE!
+        if (isLongFormOrFeedOverviewActive(root)) {
+            return false
+        }
+
+        // 1. Direct layout ID matches for visible Shorts/Reel player
+        val rect = Rect()
         for (id in shortsViewIds) {
             val nodes = root.findAccessibilityNodeInfosByViewId(id)
             if (!nodes.isNullOrEmpty()) {
+                for (node in nodes) {
+                    if (node.isVisibleToUser) {
+                        node.getBoundsInScreen(rect)
+                        // A full-screen or prominent vertical Shorts player must have substantial height
+                        if (rect.height() >= 500 && rect.width() >= 300) {
+                            val resId = node.viewIdResourceName?.lowercase(Locale.US) ?: ""
+                            val isShelf = resId.contains("shelf") || resId.contains("pivot") || resId.contains("carousel") || resId.contains("tray")
+                            if (!isShelf) {
+                                nodes.forEach { it.recycle() }
+                                return true
+                            }
+                        }
+                    }
+                }
                 nodes.forEach { it.recycle() }
-                return true
             }
         }
 
-        // 2. Shorts-specific button: "Remix" only appears inside the Shorts player
-        val remixNodes = root.findAccessibilityNodeInfosByText("Remix")
-        if (!remixNodes.isNullOrEmpty()) {
-            remixNodes.forEach { it.recycle() }
-            return true
+        // 2. Deep hierarchical scan for visible reel keywords and action buttons
+        return scanForShortsIndicators(root, 0)
+    }
+
+    private fun isLongFormOrFeedOverviewActive(root: AccessibilityNodeInfo): Boolean {
+        // A. Long-form video player is visible to user
+        val watchPlayerIds = listOf(
+            "com.google.android.youtube:id/watch_player",
+            "com.google.android.youtube:id/player_fragment_container",
+            "com.google.android.youtube:id/movie_player",
+            "com.google.android.youtube:id/player_view",
+            "com.google.android.youtube:id/watch_while_layout"
+        )
+        for (id in watchPlayerIds) {
+            val nodes = root.findAccessibilityNodeInfosByViewId(id)
+            if (!nodes.isNullOrEmpty()) {
+                val isVisible = nodes.any { it.isVisibleToUser }
+                nodes.forEach { it.recycle() }
+                if (isVisible) return true
+            }
         }
 
-        // 3. Deep hierarchical scan for reel keywords, descriptions, and action buttons
-        return scanForShortsIndicators(root, 0)
+        // B. Feed Overview: Inline autoplay player or feed recycler view
+        val feedIds = listOf(
+            "com.google.android.youtube:id/inline_player",
+            "com.google.android.youtube:id/feed_filter_bar",
+            "com.google.android.youtube:id/feed_swipe_refresh_layout"
+        )
+        for (id in feedIds) {
+            val nodes = root.findAccessibilityNodeInfosByViewId(id)
+            if (!nodes.isNullOrEmpty()) {
+                val isVisible = nodes.any { it.isVisibleToUser }
+                nodes.forEach { it.recycle() }
+                if (isVisible) return true
+            }
+        }
+
+        // C. Bottom navigation bar: check if Home, Subscriptions, or Library tab is selected
+        val navTabs = listOf("Home", "Subscriptions", "You", "Library")
+        for (tabName in navTabs) {
+            val nodes = root.findAccessibilityNodeInfosByText(tabName)
+            if (!nodes.isNullOrEmpty()) {
+                for (node in nodes) {
+                    if (node.isSelected || node.parent?.isSelected == true) {
+                        nodes.forEach { it.recycle() }
+                        return true
+                    }
+                }
+                nodes.forEach { it.recycle() }
+            }
+        }
+
+        return false
     }
 
     private fun scanForShortsIndicators(node: AccessibilityNodeInfo?, depth: Int): Boolean {
         if (node == null || depth > 30) return false
+        if (!node.isVisibleToUser) return false
 
         val resId = node.viewIdResourceName
         if (resId != null) {
             val lowerId = resId.lowercase(Locale.US)
-            val isNavOrShelf = lowerId.contains("shelf") || lowerId.contains("pivot") || lowerId.contains("tab")
+            val isNavOrShelf = lowerId.contains("shelf") || lowerId.contains("pivot") || lowerId.contains("tab") || lowerId.contains("carousel") || lowerId.contains("tray")
             if (!isNavOrShelf) {
-                if (lowerId.contains("reel") ||
-                    lowerId.contains("shorts_player") ||
-                    lowerId.contains("shorts_container") ||
-                    lowerId.contains("shorts_video") ||
-                    lowerId.contains("shorts_surface") ||
-                    lowerId.contains("shorts_pager")) {
-                    return true
+                if (lowerId.contains("reel_player_page_view") ||
+                    lowerId.contains("shorts_player_view") ||
+                    lowerId.contains("shorts_view_pager") ||
+                    lowerId.contains("reel_watch_fragment")) {
+                    val rect = Rect()
+                    node.getBoundsInScreen(rect)
+                    if (rect.height() >= 500) {
+                        return true
+                    }
                 }
             }
         }
@@ -328,21 +394,10 @@ class DoomsAccessibilityService : AccessibilityService() {
         val desc = node.contentDescription?.toString()
         if (desc != null) {
             val lowerDesc = desc.lowercase(Locale.US)
-            if (lowerDesc.contains("remix this") ||
-                lowerDesc.contains("remix with") ||
+            if (lowerDesc.contains("remix this short") ||
                 lowerDesc.contains("dislike this short") ||
-                lowerDesc.contains("dislike this video along with") ||
-                lowerDesc.contains("create a short using") ||
-                lowerDesc.contains("use this sound") ||
-                (lowerDesc.contains("dislike") && (lowerDesc.contains("other") || lowerDesc.contains("person") || lowerDesc.contains("along with")))) {
-                return true
-            }
-        }
-
-        val text = node.text?.toString()
-        if (text != null) {
-            val lowerText = text.lowercase(Locale.US)
-            if (lowerText == "remix" || lowerText == "use this sound") {
+                lowerDesc.contains("sound used in this short") ||
+                lowerDesc.contains("create a short using")) {
                 return true
             }
         }

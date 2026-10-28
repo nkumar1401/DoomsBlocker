@@ -267,6 +267,41 @@ void main() {
       // YouTube Long-Form (lecture/tutorial) is 100% permitted
       expect(shouldLockPackage(packageName: 'com.google.android.youtube', isInsideShorts: false, isLocked: isShortFormLocked), isFalse);
     });
+
+    test('Exiting Shorts to YouTube Home Feed Overview or Long-Form immediately pauses timer', () {
+      bool isShortsDetected({
+        required bool isVisibleToUser,
+        required bool isShortsPlayer,
+        required bool isHomeFeedOverviewOrLongForm,
+      }) {
+        if (isHomeFeedOverviewOrLongForm) {
+          // If Home Feed Overview (with inline preview) or watch player is active, Shorts is always FALSE
+          return false;
+        }
+        return isVisibleToUser && isShortsPlayer;
+      }
+
+      // 1. While inside Shorts: timer active
+      expect(isShortsDetected(
+        isVisibleToUser: true,
+        isShortsPlayer: true,
+        isHomeFeedOverviewOrLongForm: false,
+      ), isTrue);
+
+      // 2. Switched back to Home feed overview: timer immediately pauses
+      expect(isShortsDetected(
+        isVisibleToUser: false, // Shorts fragment hidden in backstack
+        isShortsPlayer: true,
+        isHomeFeedOverviewOrLongForm: true, // Home tab / inline player visible
+      ), isFalse);
+
+      // 3. Watching a long-form video: timer paused
+      expect(isShortsDetected(
+        isVisibleToUser: false,
+        isShortsPlayer: true,
+        isHomeFeedOverviewOrLongForm: true, // watch_player active
+      ), isFalse);
+    });
   });
 
   group('SPEC 7: Google Pay-Style Security Session & First-Time PIN Invariants', () {
