@@ -268,38 +268,75 @@ void main() {
       expect(shouldLockPackage(packageName: 'com.google.android.youtube', isInsideShorts: false, isLocked: isShortFormLocked), isFalse);
     });
 
-    test('Exiting Shorts to YouTube Home Feed Overview or Long-Form immediately pauses timer', () {
+    test('Shorts detection covers fullscreen (from tab or Home) and Home feed shelf, while pausing on long-form and non-shorts feed', () {
       bool isShortsDetected({
-        required bool isVisibleToUser,
-        required bool isShortsPlayer,
-        required bool isHomeFeedOverviewOrLongForm,
+        required bool isFullscreenShortsVisible,
+        required bool isShortsTabSelected,
+        required bool isShortsIndicatorsFound,
+        required bool isShortsShelfVisibleOnFeed,
+        required bool isWatchPlayerVisible,
       }) {
-        if (isHomeFeedOverviewOrLongForm) {
-          // If Home Feed Overview (with inline preview) or watch player is active, Shorts is always FALSE
-          return false;
-        }
-        return isVisibleToUser && isShortsPlayer;
+        // 1. Direct layout ID matches for an active, visible full-screen vertical Shorts player
+        if (isFullscreenShortsVisible) return true;
+
+        // 2. Long-form video player is visible (educational content exemption)
+        if (isWatchPlayerVisible) return false;
+
+        // 3. Shorts tab selected
+        if (isShortsTabSelected) return true;
+
+        // 4. Shorts action indicators
+        if (isShortsIndicatorsFound) return true;
+
+        // 5. Shorts shelf visible on Home feed
+        if (isShortsShelfVisibleOnFeed) return true;
+
+        return false;
       }
 
-      // 1. While inside Shorts: timer active
+      // 1. Fullscreen Shorts opened from bottom Shorts tab: timer counts
       expect(isShortsDetected(
-        isVisibleToUser: true,
-        isShortsPlayer: true,
-        isHomeFeedOverviewOrLongForm: false,
+        isFullscreenShortsVisible: true,
+        isShortsTabSelected: true,
+        isShortsIndicatorsFound: true,
+        isShortsShelfVisibleOnFeed: false,
+        isWatchPlayerVisible: false,
       ), isTrue);
 
-      // 2. Switched back to Home feed overview: timer immediately pauses
+      // 2. Fullscreen Shorts tapped from Home feed shelf: timer counts even if Home tab was selected in background
       expect(isShortsDetected(
-        isVisibleToUser: false, // Shorts fragment hidden in backstack
-        isShortsPlayer: true,
-        isHomeFeedOverviewOrLongForm: true, // Home tab / inline player visible
+        isFullscreenShortsVisible: true,
+        isShortsTabSelected: false,
+        isShortsIndicatorsFound: true,
+        isShortsShelfVisibleOnFeed: false,
+        isWatchPlayerVisible: false,
+      ), isTrue);
+
+      // 3. Scrolling/watching Shorts shelf carousel on the Home screen: timer counts
+      expect(isShortsDetected(
+        isFullscreenShortsVisible: false,
+        isShortsTabSelected: false,
+        isShortsIndicatorsFound: false,
+        isShortsShelfVisibleOnFeed: true,
+        isWatchPlayerVisible: false,
+      ), isTrue);
+
+      // 4. Watching a regular long-form video (watch_player active): timer immediately pauses
+      expect(isShortsDetected(
+        isFullscreenShortsVisible: false,
+        isShortsTabSelected: false,
+        isShortsIndicatorsFound: false,
+        isShortsShelfVisibleOnFeed: false,
+        isWatchPlayerVisible: true,
       ), isFalse);
 
-      // 3. Watching a long-form video: timer paused
+      // 5. Scrolling Home feed past regular 16:9 video posts (Shorts shelf off-screen): timer paused
       expect(isShortsDetected(
-        isVisibleToUser: false,
-        isShortsPlayer: true,
-        isHomeFeedOverviewOrLongForm: true, // watch_player active
+        isFullscreenShortsVisible: false,
+        isShortsTabSelected: false,
+        isShortsIndicatorsFound: false,
+        isShortsShelfVisibleOnFeed: false,
+        isWatchPlayerVisible: false,
       ), isFalse);
     });
 

@@ -286,27 +286,25 @@ class DoomsAccessibilityService : AccessibilityService() {
     }
 
     private fun detectShortsPresence(root: AccessibilityNodeInfo): Boolean {
-        // 0. If user is in feed overview (home/subscriptions) or watching a long-form video (including inline preview), Shorts is FALSE!
-        if (isLongFormOrFeedOverviewActive(root)) {
-            return false
-        }
-
-        // 1. Direct layout ID matches for visible Shorts/Reel player
+        val displayMetrics = resources.displayMetrics
+        val minFullscreenHeight = (displayMetrics.heightPixels * 0.50).toInt()
+        val minFullscreenWidth = (displayMetrics.widthPixels * 0.50).toInt()
         val rect = Rect()
+
+        // 1. Direct layout ID matches for an active, visible full-screen vertical Shorts player
+        // (Handles Shorts opened from bottom tab, tapped from Home feed shelf, search, or external link)
         for (id in shortsViewIds) {
             val nodes = root.findAccessibilityNodeInfosByViewId(id)
             if (!nodes.isNullOrEmpty()) {
                 for (node in nodes) {
                     if (node.isVisibleToUser) {
                         node.getBoundsInScreen(rect)
-                        // A full-screen or prominent vertical Shorts player must have substantial height
-                        if (rect.height() >= 500 && rect.width() >= 300) {
-                            val resId = node.viewIdResourceName?.lowercase(Locale.US) ?: ""
-                            val isShelf = resId.contains("shelf") || resId.contains("pivot") || resId.contains("carousel") || resId.contains("tray")
-                            if (!isShelf) {
-                                nodes.forEach { it.recycle() }
-                                return true
-                            }
+                        val resId = node.viewIdResourceName?.lowercase(Locale.US) ?: ""
+                        val isShelf = resId.contains("shelf") || resId.contains("pivot") ||
+                                      resId.contains("carousel") || resId.contains("tray")
+                        if (!isShelf && rect.height() >= minFullscreenHeight && rect.width() >= minFullscreenWidth) {
+                            nodes.forEach { it.recycle() }
+                            return true
                         }
                     }
                 }
@@ -314,18 +312,42 @@ class DoomsAccessibilityService : AccessibilityService() {
             }
         }
 
-        // 2. Deep hierarchical scan for visible reel keywords and action buttons
-        return scanForShortsIndicators(root, 0)
+        // 2. If a regular long-form video player is visible, user is watching educational long-form content
+        // (Invariant 2 Exemption: timer immediately pauses)
+        if (isWatchPlayerActive(root)) {
+            return false
+        }
+
+        // 3. Check if the bottom navigation bar has the "Shorts" tab explicitly selected
+        val shortsTabNodes = root.findAccessibilityNodeInfosByText("Shorts")
+        if (!shortsTabNodes.isNullOrEmpty()) {
+            for (node in shortsTabNodes) {
+                if (node.isVisibleToUser && (node.isSelected || node.parent?.isSelected == true)) {
+                    shortsTabNodes.forEach { it.recycle() }
+                    return true
+                }
+            }
+            shortsTabNodes.forEach { it.recycle() }
+        }
+
+        // 4. Deep hierarchical scan for visible Shorts player action buttons & indicators
+        if (scanForShortsIndicators(root, 0)) {
+            return true
+        }
+
+        // 5. Check if the horizontal Shorts shelf is active and visible on the Home feed
+        if (isShortsShelfActiveOnScreen(root)) {
+            return true
+        }
+
+        return false
     }
 
-    private fun isLongFormOrFeedOverviewActive(root: AccessibilityNodeInfo): Boolean {
-        // A. Long-form video player is visible to user
+    private fun isWatchPlayerActive(root: AccessibilityNodeInfo): Boolean {
         val watchPlayerIds = listOf(
             "com.google.android.youtube:id/watch_player",
             "com.google.android.youtube:id/player_fragment_container",
-            "com.google.android.youtube:id/movie_player",
-            "com.google.android.youtube:id/player_view",
-            "com.google.android.youtube:id/watch_while_layout"
+            "com.google.android.youtube:id/movie_player"
         )
         for (id in watchPlayerIds) {
             val nodes = root.findAccessibilityNodeInfosByViewId(id)
@@ -335,35 +357,55 @@ class DoomsAccessibilityService : AccessibilityService() {
                 if (isVisible) return true
             }
         }
+        return false
+    }
 
-        // B. Feed Overview: Inline autoplay player or feed recycler view
-        val feedIds = listOf(
-            "com.google.android.youtube:id/inline_player",
-            "com.google.android.youtube:id/feed_filter_bar",
-            "com.google.android.youtube:id/feed_swipe_refresh_layout"
+    private fun isShortsShelfActiveOnScreen(root: AccessibilityNodeInfo): Boolean {
+        val shelfViewIds = listOf(
+            "com.google.android.youtube:id/reel_shelf",
+            "com.google.android.youtube:id/shorts_shelf",
+            "com.google.android.youtube:id/reel_shelf_recycler_view",
+            "com.google.android.youtube:id/reel_shelf_item",
+            "com.google.android.youtube:id/reel_item_layout",
+            "com.google.android.youtube:id/shorts_shelf_cell",
+            "com.google.android.youtube:id/reel_carousel"
         )
-        for (id in feedIds) {
+
+        val rect = Rect()
+        for (id in shelfViewIds) {
             val nodes = root.findAccessibilityNodeInfosByViewId(id)
             if (!nodes.isNullOrEmpty()) {
-                val isVisible = nodes.any { it.isVisibleToUser }
-                nodes.forEach { it.recycle() }
-                if (isVisible) return true
-            }
-        }
-
-        // C. Bottom navigation bar: check if Home, Subscriptions, or Library tab is selected
-        val navTabs = listOf("Home", "Subscriptions", "You", "Library")
-        for (tabName in navTabs) {
-            val nodes = root.findAccessibilityNodeInfosByText(tabName)
-            if (!nodes.isNullOrEmpty()) {
                 for (node in nodes) {
-                    if (node.isSelected || node.parent?.isSelected == true) {
-                        nodes.forEach { it.recycle() }
-                        return true
+                    if (node.isVisibleToUser) {
+                        node.getBoundsInScreen(rect)
+                        if (rect.height() >= 250 && rect.width() >= 150) {
+                            nodes.forEach { it.recycle() }
+                            return true
+                        }
                     }
                 }
                 nodes.forEach { it.recycle() }
             }
+        }
+
+        // Also detect "Shorts" header on the feed shelf when visible on screen
+        val headerNodes = root.findAccessibilityNodeInfosByText("Shorts")
+        if (!headerNodes.isNullOrEmpty()) {
+            val displayMetrics = resources.displayMetrics
+            for (node in headerNodes) {
+                if (node.isVisibleToUser) {
+                    node.getBoundsInScreen(rect)
+                    val resId = node.viewIdResourceName?.lowercase(Locale.US) ?: ""
+                    val isFeedShelfHeader = resId.contains("title") || resId.contains("header") ||
+                                           resId.contains("shelf") ||
+                                           (rect.top > 150 && rect.bottom < displayMetrics.heightPixels - 180)
+                    if (isFeedShelfHeader && !node.isSelected && node.parent?.isSelected != true) {
+                        headerNodes.forEach { it.recycle() }
+                        return true
+                    }
+                }
+            }
+            headerNodes.forEach { it.recycle() }
         }
 
         return false

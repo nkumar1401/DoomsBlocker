@@ -10,9 +10,12 @@ This document serves as the **Single Source of Truth (SSOT)** for DoomsBlocker. 
 * **Goal**: Stop doomscrolling on short-form feeds without blocking educational long-form videos or productive communication.
 * **Unified Short-Form Pool (YouTube Shorts & Instagram)**:
   * **Short-Form Tracking**: Time spent inside YouTube Shorts or active inside Instagram (including home feed reels and the clips viewer) increments the shared `shortsUsedSecondsToday` pool.
-  * **YouTube Long-Form Exemption (Invariant 2)**: Long-form YouTube videos (lectures, tutorials, news, podcasts) and the YouTube Home Feed Overview (including inline feed video previews) are **100% permitted** and never locked or counted. Exiting from Shorts back to the Home Feed or opening a long-form video must immediately pause the Shorts scroll timer without requiring an app restart.
+  * **YouTube Shorts Scope**:
+    1. **Fullscreen Shorts Player**: Opened from bottom Shorts tab, tapped from Home feed shelf, search, or external links.
+    2. **Home Feed Shorts Shelf**: Actively playing or scrolling through vertical Short cards in the Home feed carousel.
+  * **YouTube Long-Form Exemption (Invariant 2)**: Long-form YouTube videos (lectures, tutorials, news, podcasts, `watch_player`) and non-Shorts Home Feed browsing (16:9 regular video posts and feed overviews) are **100% permitted** and immediately pause the scroll timer without requiring an app restart.
   * **Dynamic Threshold**: Shared limit is read dynamically from `prefs.shortsLimitMinutes * 60` (Default: 5 min).
-  * **Lock Action**: When `usedSec >= limitSec` or during active lockout window (`shortsLockDurationMinutes`):
+  * **Lock Action**: When `usedSec >= limitSec` (whether in fullscreen Shorts or on the Home feed Shorts shelf) or during active lockout window (`shortsLockDurationMinutes`):
     1. Immediately pause media audio and request transient audio focus.
     2. In YouTube: Vertical short-form player is ejected/blocked, preserving educational long-form playback.
     3. In Instagram: The entire Instagram application is locked to prevent home-feed reels doomscrolling.
