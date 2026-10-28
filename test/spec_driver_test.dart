@@ -302,6 +302,38 @@ void main() {
         isHomeFeedOverviewOrLongForm: true, // watch_player active
       ), isFalse);
     });
+
+    test('Cooldown expiration automatically resets scroll time to 0 and clears lockout', () {
+      int shortsUsedSeconds = 602; // 10:02 used (limit 10:00)
+      const limitSeconds = 600; // 10 min
+      int lockUntilTimestamp = 100000;
+
+      // Simulated checkCooldownExpiration engine matching AppPreferences.kt
+      void checkCooldownExpiration(int currentTimestamp) {
+        if (lockUntilTimestamp > 0 && currentTimestamp >= lockUntilTimestamp) {
+          lockUntilTimestamp = 0;
+          shortsUsedSeconds = 0;
+        }
+      }
+
+      bool isShortsLocked(int currentTimestamp) {
+        checkCooldownExpiration(currentTimestamp);
+        return (lockUntilTimestamp > 0 && currentTimestamp < lockUntilTimestamp) ||
+            (shortsUsedSeconds >= limitSeconds);
+      }
+
+      // During cooldown (time: 95000): locked
+      expect(isShortsLocked(95000), isTrue);
+      expect(shortsUsedSeconds, equals(602));
+
+      // Exactly when cooldown finishes (time: 100000): resets to 0 and unlocks!
+      expect(isShortsLocked(100000), isFalse);
+      expect(shortsUsedSeconds, equals(0));
+      expect(lockUntilTimestamp, equals(0));
+
+      // New session has full 10-minute scroll allowance
+      expect(shortsUsedSeconds < limitSeconds, isTrue);
+    });
   });
 
   group('SPEC 7: Google Pay-Style Security Session & First-Time PIN Invariants', () {

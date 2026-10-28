@@ -55,15 +55,35 @@ class AppPreferences(context: Context) {
         set(value) = prefs.edit().putInt(KEY_SHORTS_LOCK_MINS, value).apply()
 
     var youtubeLockUntilTimestamp: Long
-        get() = prefs.getLong(KEY_YT_LOCK_UNTIL, 0L)
+        get() {
+            checkCooldownExpiration()
+            return prefs.getLong(KEY_YT_LOCK_UNTIL, 0L)
+        }
         set(value) = prefs.edit().putLong(KEY_YT_LOCK_UNTIL, value).apply()
 
     val isYouTubeLocked: Boolean
-        get() = isStudyZoneActive || (System.currentTimeMillis() < youtubeLockUntilTimestamp)
+        get() {
+            checkCooldownExpiration()
+            return isStudyZoneActive || (System.currentTimeMillis() < prefs.getLong(KEY_YT_LOCK_UNTIL, 0L))
+        }
+
+    fun checkCooldownExpiration() {
+        checkDailyReset()
+        val lockUntil = prefs.getLong(KEY_YT_LOCK_UNTIL, 0L)
+        if (lockUntil > 0L && System.currentTimeMillis() >= lockUntil) {
+            // Cooldown period has finished naturally!
+            // Reset the lock timestamp and reset scroll usage for the new session!
+            prefs.edit()
+                .putLong(KEY_YT_LOCK_UNTIL, 0L)
+                .putInt(KEY_SHORTS_USED_SECONDS, 0)
+                .apply()
+        }
+    }
 
     var shortsUsedSecondsToday: Int
         get() {
             checkDailyReset()
+            checkCooldownExpiration()
             return prefs.getInt(KEY_SHORTS_USED_SECONDS, 0)
         }
         set(value) = prefs.edit().putInt(KEY_SHORTS_USED_SECONDS, value).apply()

@@ -19,6 +19,10 @@ This document serves as the **Single Source of Truth (SSOT)** for DoomsBlocker. 
     4. Display `OverlayLockActivity` with `REASON_SHORTS_LIMIT` for a smooth 5-second countdown popup.
     5. Auto-dismiss to Phone Home Screen upon countdown expiry.
   * **Blocked Channels**: Channels listed in `prefs.blockedChannels` are completely blocked (both long-form videos and shorts) using case-insensitive matching, triggering `OverlayLockActivity.REASON_CHANNEL_BLOCKED` and returning to Home.
+  * **Cooldown Expiration & Scroll Time Reset Invariant**:
+    * When the configured cooldown lockout window finishes (`System.currentTimeMillis() >= youtubeLockUntilTimestamp`), the lockout timestamp is cleared and `shortsUsedSecondsToday` automatically resets to 0.
+    * The user receives a fresh scroll time allowance for their new session without re-triggering the lockout.
+    * The persistent notification immediately transitions to the unlocked status icon (`ic_notification_unlocked`) and resets its progress bar to `00:00 / <limit>`.
   * **Nephew Mode Disabled**: PIN is not required for normal usage; parent PIN is strictly for Nephew Mode overrides.
 
 ### 1.2 Mode B: Nephew Guard Mode
