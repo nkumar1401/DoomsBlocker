@@ -136,9 +136,19 @@ This document serves as the **Single Source of Truth (SSOT)** for DoomsBlocker. 
 
 ---
 
-## 6. Future Roadmap (v2.0 Post-Launch Specifications)
+## 6. Future Platform Roadmap (v1.1.0 & v2.0 Architecture)
 
-### 6.1 Optional Cloud Backup & Cross-Device Sync
+### 6.1 Multi-App Short-Form Selection (v1.1.0 Competitor Parity Specification)
+* **Scope Selector**: Users can choose which short-form platforms contribute to their unified doomscrolling pool:
+  * YouTube Shorts (Smart section tracking, long-form educational exemption)
+  * Instagram Reels (Clips viewer and home-feed reels)
+  * Snapchat (Spotlight feed vs chat)
+  * Facebook (Facebook Reels vs feed posts)
+  * Moj / Josh / ShareChat (Full-app lock for pure short-video clones)
+* **Unified Screen-Time Pool**: All checked platforms share the same dynamic limit (e.g. 10 minutes total across all platforms) and enter the shared cooldown window together.
+* **Hybrid Ejection Engine**: Pure short-video apps (Moj, Josh) lock the entire app, while multi-purpose platforms (Snapchat, Facebook) selectively block the vertical video player, preserving direct messages and communication.
+
+### 6.2 Optional Cloud Backup & Cross-Device Sync (v2.0)
 * **Launch Stance**: Version 1.0 launches as a 100% offline, zero-data-collection application to ensure instant Google Play review approval and frictionless student/user adoption.
 * **v2.0 Authentication Provider**: Google 1-Tap Sign-In (native Android credential manager). Zero SMS gateway bills and instant 1-tap setup.
 * **Opt-In Architecture**: 
