@@ -68,31 +68,36 @@ object LockOverlayManager {
                 val prefs = AppPreferences(context)
                 when (reason) {
                     OverlayLockActivity.REASON_SHORTS_LIMIT -> {
-                        tvTitle?.text = context.getString(R.string.lock_title_shorts)
-                        tvMessage?.text = context.getString(
-                            R.string.lock_message_shorts,
-                            prefs.shortsLimitMinutes,
-                            prefs.shortsLockDurationMinutes
-                        )
+                        val isInstagram = targetPackage == "com.instagram.android"
+                        tvTitle?.text = if (isInstagram) "Instagram Locked" else "YouTube Shorts Blocked"
+                        tvMessage?.text = if (isInstagram) {
+                            "Short-form limit reached (${prefs.shortsLimitMinutes} min).\nInstagram is locked for ${prefs.shortsLockDurationMinutes} min to prevent doomscrolling."
+                        } else {
+                            "Shorts limit reached (${prefs.shortsLimitMinutes} min).\nShorts is locked for ${prefs.shortsLockDurationMinutes} min.\n(Long-form YouTube videos remain accessible)."
+                        }
                     }
                     OverlayLockActivity.REASON_YOUTUBE_LOCKED -> {
-                        tvTitle?.text = context.getString(R.string.lock_title_youtube_nephew)
-                        tvMessage?.text = context.getString(R.string.lock_message_youtube_nephew)
+                        tvTitle?.text = "YouTube is Locked"
+                        tvMessage?.text = if (prefs.isNephewModeEnabled) {
+                            "Nephew Mode Active: Complete YouTube access is locked for ${prefs.shortsLockDurationMinutes} minutes."
+                        } else {
+                            "YouTube access remains locked until timer expires. Take a break!"
+                        }
                     }
                     OverlayLockActivity.REASON_GAME_LIMIT -> {
-                        val appName = blockedItem ?: "Game"
-                        tvTitle?.text = context.getString(R.string.lock_title_game, appName)
-                        tvMessage?.text = context.getString(R.string.lock_message_game, appName, prefs.gameLimitMinutes)
+                        val appLabel = if (!blockedItem.isNullOrEmpty()) blockedItem else "Games"
+                        tvTitle?.text = "Game Time Limit Reached"
+                        tvMessage?.text = "$appLabel reached the ${prefs.gameLimitMinutes}-minute daily limit under Nephew Mode."
                     }
                     OverlayLockActivity.REASON_CHANNEL_BLOCKED -> {
                         val channel = blockedItem ?: "Channel"
-                        tvTitle?.text = "Channel Blocked"
-                        tvMessage?.text = "Videos from \"$channel\" are restricted."
+                        tvTitle?.text = "Restricted YouTube Channel"
+                        tvMessage?.text = "The channel \"$channel\" is blocked by your parental restriction rules."
                     }
                     OverlayLockActivity.REASON_STUDY_ZONE -> {
-                        val library = blockedItem ?: "Study Zone"
-                        tvTitle?.text = "Library Study Zone Active"
-                        tvMessage?.text = "Focus mode is locked for $library. Distraction apps are disabled."
+                        val library = if (!blockedItem.isNullOrEmpty()) blockedItem else prefs.studyZoneName
+                        tvTitle?.text = "📚 Study Zone Active"
+                        tvMessage?.text = "You are currently in a focused study session at $library.\nDistractions (Instagram, Games & Shorts) are locked."
                     }
                 }
 

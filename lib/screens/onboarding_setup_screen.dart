@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/native_bridge.dart';
-import '../widgets/pin_dialog.dart';
+import '../widgets/create_pin_dialog.dart';
 import 'dashboard_screen.dart';
 
 class OnboardingSetupScreen extends StatefulWidget {
@@ -72,15 +72,8 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
       _manufacturer.contains('realme');
 
   Future<void> _handleSetPin() async {
-    final pin = await PinDialog.showAndGetPin(
-      context,
-      title: 'Create Security PIN',
-      description: 'Enter a 4-digit PIN for emergency unlocks and settings protection.',
-      isCreatingPin: true,
-    );
-
-    if (pin != null && pin.length == 4) {
-      await NativeBridge.setPin(pin);
+    final success = await CreatePinDialog.show(context);
+    if (success) {
       await _refreshStatus();
     }
   }
@@ -439,3 +432,4 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
     );
   }
 }
+
