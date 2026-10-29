@@ -101,6 +101,11 @@ This document serves as the **Single Source of Truth (SSOT)** for DoomsBlocker. 
 * **Back-Press Immunity**: `OverlayLockActivity.onBackPressed()` ignores back presses during the first 1.5 seconds after creation to absorb any trailing accessibility back actions and guarantee the 5-second countdown popup is smoothly visible.
 * **Auto-Dismiss**: Countdown counts down `5s -> 4s -> 3s -> 2s -> 1s` and redirects to the phone's Home Screen via `Intent.CATEGORY_HOME`.
 
+### 3.3 Multi-Brand OEM Compatibility & WindowManager Overlay Invariant
+* **Multi-Brand Immunity (Xiaomi, Samsung, Vivo, Oppo, Realme)**: OEM skins restrict background activity launches (`startActivity`) from accessibility and foreground services.
+* **Direct WindowManager Overlay**: When "Display over other apps" is granted, the 5-second countdown lock view is rendered directly via `WindowManager` (`TYPE_APPLICATION_OVERLAY`). This guarantees the smooth countdown popup displays reliably on 100% of Android devices without being blocked by Xiaomi/MIUI "Display pop-up windows while running in the background" restrictions.
+* **OEM Setup Guidance**: Provide a 1-tap battery and autostart optimization helper card in the UI on devices from aggressive OEM manufacturers (Xiaomi, Samsung, Vivo, Oppo) to prevent background services from being terminated by OEM task killers.
+
 ---
 
 ## 4. UI Design & Scanner Standards
@@ -111,10 +116,11 @@ This document serves as the **Single Source of Truth (SSOT)** for DoomsBlocker. 
 
 ## 5. Security Architecture (Google Pay-Style Session Authentication)
 
-### 5.1 First-Time PIN Setup (Zero Hardcoded Default PIN)
-* **Initial State**: Fresh installations start with no PIN configured (`isPinSet == false`). The legacy default PIN (`1234`) is deprecated.
-* **On-Demand Creation**: The first time any protected feature (Shorts Rules, Blocked Channels, App Limits, Nephew Guard toggle, or Security PIN) is accessed, an intuitive 2-step setup dialog prompts the user to create and confirm their custom 4-digit PIN.
-* **Storage**: Saved securely in `AppPreferences` via `NativeBridge.setPin(newPin)`.
+### 5.1 First-Time Setup & Onboarding Guard Invariant
+* **Mandatory Setup Guard**: Upon app launch, if no PIN is configured (`isPinSet == false`) OR any of the 3 essential permissions (`accessibility`, `overlay`, `usageStats`) is missing, the app directs to a dedicated `OnboardingSetupScreen`.
+* **Upfront PIN Creation**: The user must create and confirm their 4-digit Parent/Emergency PIN first so they can never be trapped in a lock window without a known PIN.
+* **Live Permission Verification**: The 3 essential permissions (Accessibility Service, Display Over Other Apps, Usage Access) are displayed with live status checkmarks and 1-tap grant buttons.
+* **Dashboard Gateway**: The "CONTINUE TO DASHBOARD" button is strictly unlocked only when the PIN is set and all 3 essential permissions are granted. Once configured, subsequent app launches proceed directly to the Dashboard.
 
 ### 5.2 Google Pay-Style Session Lifecycle
 * **Single Unlock Per Session**: Once the user unlocks any protected section, the entire Control Panel stays authenticated in memory. Users can freely move between Shorts Rules, Blocked Channels, and App Limits without repetitive PIN prompts.

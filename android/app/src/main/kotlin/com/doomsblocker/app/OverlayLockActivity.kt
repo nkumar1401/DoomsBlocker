@@ -41,13 +41,26 @@ class OverlayLockActivity : Activity() {
             blockedItem: String? = null,
             targetPackage: String? = null
         ) {
-            val intent = Intent(context, OverlayLockActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                putExtra(EXTRA_REASON, reason)
-                putExtra(EXTRA_BLOCKED_ITEM, blockedItem)
-                putExtra(EXTRA_PACKAGE_NAME, targetPackage)
+            // 1. Immediately show the native WindowManager overlay.
+            // This is immune to OEM Background Activity Launch restrictions (MIUI/HyperOS, Samsung, Vivo).
+            try {
+                LockOverlayManager.show(context, reason, blockedItem, targetPackage)
+            } catch (e: Exception) {
+                Log.e("OverlayLockActivity", "Error showing LockOverlayManager: ${e.message}")
             }
-            context.startActivity(intent)
+
+            // 2. Also attempt starting OverlayLockActivity for full interactive PIN support on supported OEMs
+            try {
+                val intent = Intent(context, OverlayLockActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    putExtra(EXTRA_REASON, reason)
+                    putExtra(EXTRA_BLOCKED_ITEM, blockedItem)
+                    putExtra(EXTRA_PACKAGE_NAME, targetPackage)
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                Log.w("OverlayLockActivity", "startActivity dropped by system/OEM: ${e.message}")
+            }
         }
     }
 
@@ -78,6 +91,8 @@ class OverlayLockActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         activityCreationTimeMillis = System.currentTimeMillis()
+        // If native WindowManager overlay was showing, dismiss it so this full Activity takes over
+        LockOverlayManager.dismiss(this)
         setContentView(R.layout.activity_overlay_lock)
 
         prefs = AppPreferences(this)
@@ -360,6 +375,7 @@ class OverlayLockActivity : Activity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        LockOverlayManager.dismiss(this)
         try {
             unregisterReceiver(dismissReceiver)
         } catch (e: Exception) {

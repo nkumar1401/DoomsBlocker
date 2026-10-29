@@ -423,6 +423,53 @@ void main() {
       expect(isPinConfigured(), isFalse);
     });
 
+    test('App Gateway strictly displays Onboarding Setup screen when PIN is not set or permissions missing', () {
+      String determineAppLaunchScreen({
+        required bool isPinSet,
+        required bool accessibilityGranted,
+        required bool overlayGranted,
+        required bool usageStatsGranted,
+      }) {
+        final allPerms = accessibilityGranted && overlayGranted && usageStatsGranted;
+        if (!isPinSet || !allPerms) {
+          return 'ONBOARDING_SETUP_SCREEN';
+        }
+        return 'DASHBOARD_SCREEN';
+      }
+
+      // Case 1: Fresh install (no PIN, no permissions) -> Must show onboarding
+      expect(determineAppLaunchScreen(
+        isPinSet: false,
+        accessibilityGranted: false,
+        overlayGranted: false,
+        usageStatsGranted: false,
+      ), equals('ONBOARDING_SETUP_SCREEN'));
+
+      // Case 2: Permissions granted but user forgot to set PIN -> Must show onboarding
+      expect(determineAppLaunchScreen(
+        isPinSet: false,
+        accessibilityGranted: true,
+        overlayGranted: true,
+        usageStatsGranted: true,
+      ), equals('ONBOARDING_SETUP_SCREEN'));
+
+      // Case 3: PIN set but accessibility revoked -> Must show onboarding
+      expect(determineAppLaunchScreen(
+        isPinSet: true,
+        accessibilityGranted: false,
+        overlayGranted: true,
+        usageStatsGranted: true,
+      ), equals('ONBOARDING_SETUP_SCREEN'));
+
+      // Case 4: PIN set and all 3 permissions active -> Directly open Dashboard!
+      expect(determineAppLaunchScreen(
+        isPinSet: true,
+        accessibilityGranted: true,
+        overlayGranted: true,
+        usageStatsGranted: true,
+      ), equals('DASHBOARD_SCREEN'));
+    });
+
     test('PIN creation requires exactly 4 digits and matching confirmation', () {
       bool validatePinCreation(String pin, String confirm) {
         if (pin.length != 4 || int.tryParse(pin) == null) return false;

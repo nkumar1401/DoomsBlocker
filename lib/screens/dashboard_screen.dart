@@ -51,16 +51,20 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     SessionSecurityService.instance.handleLifecycleChange(state);
   }
 
+  String _manufacturer = '';
+
   Future<void> _loadData({bool silent = false}) async {
     if (!silent) setState(() => _isLoading = true);
 
     final data = await NativeBridge.getDashboardData();
     final perms = await NativeBridge.checkPermissions();
+    final mfg = await NativeBridge.getDeviceManufacturer();
 
     if (mounted) {
       setState(() {
         _data = data;
         _permissions = perms;
+        _manufacturer = mfg.toLowerCase();
         _isLoading = false;
       });
     }
@@ -70,6 +74,15 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
       !(_permissions['accessibility'] ?? false) ||
       !(_permissions['overlay'] ?? false) ||
       !(_permissions['usageStats'] ?? false);
+
+  bool get _isAggressiveOem =>
+      _manufacturer.contains('xiaomi') ||
+      _manufacturer.contains('redmi') ||
+      _manufacturer.contains('poco') ||
+      _manufacturer.contains('samsung') ||
+      _manufacturer.contains('vivo') ||
+      _manufacturer.contains('oppo') ||
+      _manufacturer.contains('realme');
 
   String _formatSeconds(int totalSeconds) {
     final m = totalSeconds ~/ 60;
@@ -174,6 +187,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
                             children: [
                               if (_hasMissingPermissions) _buildPermissionWarningBanner(),
+                              if (_isAggressiveOem) _buildOemOptimizationCard(),
 
                               if (_data.isStudyZoneActive) ...[
                                 _buildActiveStudyZoneBanner(),
@@ -358,6 +372,58 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             child: const Text('SETUP', style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 11)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOemOptimizationCard() {
+    final brand = _manufacturer.contains('xiaomi') || _manufacturer.contains('redmi') || _manufacturer.contains('poco')
+        ? 'Xiaomi / Redmi'
+        : _manufacturer.contains('samsung')
+            ? 'Samsung'
+            : _manufacturer.contains('vivo')
+                ? 'Vivo'
+                : 'Background';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B).withOpacity(0.6),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.35)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.bolt_rounded, color: Color(0xFF38BDF8), size: 24),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$brand Background Setup',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Allow background autostart & uncheck battery saving for 100% reliable lock screens.',
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, height: 1.3),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: () => NativeBridge.openBatteryOptimizationSettings(),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              backgroundColor: const Color(0xFF38BDF8).withOpacity(0.15),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('ALLOW', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11)),
           ),
         ],
       ),

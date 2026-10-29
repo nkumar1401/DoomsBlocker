@@ -217,4 +217,19 @@ class NativeBridge {
       await _channel.invokeMethod('openUsageStatsSettings');
     } catch (_) {}
   }
+
+  static Future<String> getDeviceManufacturer() async {
+    try {
+      final res = await _channel.invokeMethod<String>('getDeviceManufacturer');
+      return res ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  static Future<void> openBatteryOptimizationSettings() async {
+    try {
+      await _channel.invokeMethod('openBatteryOptimizationSettings');
+    } catch (_) {}
+  }
 }

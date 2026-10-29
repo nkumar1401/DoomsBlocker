@@ -217,6 +217,56 @@ class MainActivity : FlutterActivity() {
                     result.success(true)
                 }
 
+                "getDeviceManufacturer" -> {
+                    result.success(Build.MANUFACTURER.lowercase())
+                }
+
+                "openBatteryOptimizationSettings" -> {
+                    try {
+                        val manufacturer = Build.MANUFACTURER.lowercase()
+                        var launched = false
+
+                        // Xiaomi / Redmi / Poco MIUI permission editor
+                        if (manufacturer.contains("xiaomi") || manufacturer.contains("redmi") || manufacturer.contains("poco")) {
+                            try {
+                                val miuiIntent = Intent("miui.intent.action.APP_PERM_EDITOR").apply {
+                                    setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity")
+                                    putExtra("extra_pkgname", packageName)
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                startActivity(miuiIntent)
+                                launched = true
+                            } catch (_: Exception) {}
+                        }
+
+                        if (!launched) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                startActivity(intent)
+                            } else {
+                                val intent = Intent(Settings.ACTION_SETTINGS).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                startActivity(intent)
+                            }
+                        }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        try {
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.parse("package:$packageName")
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (err: Exception) {
+                            result.error("INTENT_ERROR", err.message, null)
+                        }
+                    }
+                }
+
                 else -> result.notImplemented()
             }
         }
