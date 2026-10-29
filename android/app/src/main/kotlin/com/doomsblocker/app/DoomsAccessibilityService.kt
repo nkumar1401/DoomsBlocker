@@ -350,12 +350,48 @@ class DoomsAccessibilityService : AccessibilityService() {
     }
 
     private fun isWatchPlayerActive(root: AccessibilityNodeInfo): Boolean {
+        // If the user is on the Search screen, it is never a watch player
+        if (isSearchOrBrowseFeedActive(root)) return false
+
         val watchPlayerIds = listOf(
             "com.google.android.youtube:id/watch_player",
-            "com.google.android.youtube:id/player_fragment_container",
             "com.google.android.youtube:id/movie_player"
         )
+        val rect = Rect()
         for (id in watchPlayerIds) {
+            val nodes = root.findAccessibilityNodeInfosByViewId(id)
+            if (!nodes.isNullOrEmpty()) {
+                for (node in nodes) {
+                    if (node.isVisibleToUser) {
+                        node.getBoundsInScreen(rect)
+                        // A genuine active watch player must occupy a prominent area at the top
+                        if (rect.height() >= 300 && rect.width() >= 400) {
+                            nodes.forEach { it.recycle() }
+                            return true
+                        }
+                    }
+                }
+                nodes.forEach { it.recycle() }
+            }
+        }
+        return false
+    }
+
+    private fun isSearchOrBrowseFeedActive(root: AccessibilityNodeInfo): Boolean {
+        val searchAndFeedIds = listOf(
+            // Search screen & suggestions
+            "com.google.android.youtube:id/search_edit_text",
+            "com.google.android.youtube:id/search_box",
+            "com.google.android.youtube:id/results",
+            "com.google.android.youtube:id/search_results",
+            "com.google.android.youtube:id/suggestions_list",
+            "com.google.android.youtube:id/search_clear_button",
+            // Feed lists & inline overview previews
+            "com.google.android.youtube:id/inline_player",
+            "com.google.android.youtube:id/feed_swipe_refresh_layout",
+            "com.google.android.youtube:id/feed_filter_bar"
+        )
+        for (id in searchAndFeedIds) {
             val nodes = root.findAccessibilityNodeInfosByViewId(id)
             if (!nodes.isNullOrEmpty()) {
                 val isVisible = nodes.any { it.isVisibleToUser }
@@ -570,6 +606,10 @@ class DoomsAccessibilityService : AccessibilityService() {
     private fun checkAndBlockRestrictedChannels(root: AccessibilityNodeInfo) {
         val blockedList = prefs.blockedChannels
         if (blockedList.isEmpty()) return
+
+        // 0. Soft Search Immunity: Typing search queries, viewing suggestions,
+        // or scrolling search results lists must NEVER trigger channel lockout!
+        if (isSearchOrBrowseFeedActive(root)) return
 
         // Only enforce channel blocking when actively playing a video (watch player active) or inside Shorts
         val isWatchingVideo = isWatchPlayerActive(root) || isInsideShorts

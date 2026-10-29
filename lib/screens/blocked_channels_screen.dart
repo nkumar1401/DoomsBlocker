@@ -43,6 +43,70 @@ class _BlockedChannelsScreenState extends State<BlockedChannelsScreen> {
     await _load();
   }
 
+  Future<void> _editChannel(String oldChannel) async {
+    final editController = TextEditingController(text: oldChannel);
+    final updated = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Edit Blocked Channel', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Update channel name or handle. (The @ symbol is optional; both match automatically).',
+              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: editController,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Channel name (e.g. Firstpost or @Firstpost)',
+                hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                filled: true,
+                fillColor: const Color(0xFF0F172A),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFF334155)),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF94A3B8))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEC4899),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              final text = editController.text.trim();
+              if (text.isNotEmpty) {
+                Navigator.of(ctx).pop(text);
+              }
+            },
+            child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (updated != null && updated.isNotEmpty && updated != oldChannel) {
+      await NativeBridge.removeBlockedChannel(oldChannel);
+      await NativeBridge.addBlockedChannel(updated);
+      await _load();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -170,7 +234,13 @@ class _BlockedChannelsScreenState extends State<BlockedChannelsScreen> {
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Color(0xFF94A3B8), size: 20),
+                            icon: const Icon(Icons.edit_outlined, color: Color(0xFF94A3B8), size: 19),
+                            tooltip: 'Edit channel name',
+                            onPressed: () => _editChannel(channel),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Color(0xFFF43F5E), size: 19),
+                            tooltip: 'Delete channel',
                             onPressed: () => _removeChannel(channel),
                           ),
                         ],

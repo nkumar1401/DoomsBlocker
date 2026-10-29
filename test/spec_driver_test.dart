@@ -203,7 +203,10 @@ void main() {
       required String detectedText,
       required List<String> blockedList,
       required bool isWatchingVideo,
+      bool isSearchActive = false,
     }) {
+      // Soft Search Immunity: Never block while typing in search or scrolling search results
+      if (isSearchActive) return false;
       if (!isWatchingVideo) return false;
       final detectedLower = detectedText.trim().toLowerCase();
       return blockedList.any((rawBlocked) {
@@ -234,14 +237,23 @@ void main() {
       expect(isChannelBlocked(detectedText: 'Subscribe to Firstpost', blockedList: blockedList, isWatchingVideo: true), isTrue);
       expect(isChannelBlocked(detectedText: 'Go to channel Firstpost', blockedList: blockedList, isWatchingVideo: true), isTrue);
 
-      // 5. In search results (video NOT playing yet): permitted until opened
+      // 5. Soft Search Immunity: Typing channel name in search box MUST NOT throw user out
       expect(isChannelBlocked(
-        detectedText: '@Firstpost',
+        detectedText: 'Firstpost',
         blockedList: blockedList,
         isWatchingVideo: false,
+        isSearchActive: true,
       ), isFalse);
 
-      // 6. Unrestricted channels
+      // 6. Soft Search Immunity: Scrolling search results list with Firstpost cards MUST NOT throw user out
+      expect(isChannelBlocked(
+        detectedText: '@Firstpost 10 likes 496 views',
+        blockedList: blockedList,
+        isWatchingVideo: true, // even if watch fragment in background
+        isSearchActive: true,  // search is active foreground screen
+      ), isFalse);
+
+      // 7. Unrestricted channels
       expect(isChannelBlocked(detectedText: 'BBC News', blockedList: blockedList, isWatchingVideo: true), isFalse);
       expect(isChannelBlocked(detectedText: 'Khan Academy', blockedList: blockedList, isWatchingVideo: true), isFalse);
     });
