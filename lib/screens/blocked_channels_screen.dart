@@ -48,9 +48,9 @@ class _BlockedChannelsScreenState extends State<BlockedChannelsScreen> {
     final updated = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Edit Blocked Channel', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        title: const Text('Edit Blocked Channel', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -63,12 +63,12 @@ class _BlockedChannelsScreenState extends State<BlockedChannelsScreen> {
             TextField(
               controller: editController,
               autofocus: true,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
+              style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14),
               decoration: InputDecoration(
                 hintText: 'Channel name (e.g. Firstpost or @Firstpost)',
                 hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
                 filled: true,
-                fillColor: const Color(0xFF0F172A),
+                fillColor: const Color(0xFFF8FAFC),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: const BorderSide(color: Color(0xFF334155)),
@@ -94,7 +94,7 @@ class _BlockedChannelsScreenState extends State<BlockedChannelsScreen> {
                 Navigator.of(ctx).pop(text);
               }
             },
-            child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('Save', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -110,12 +110,12 @@ class _BlockedChannelsScreenState extends State<BlockedChannelsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFFF8FAFC),
         elevation: 0,
-        title: const Text('Blocked YouTube Channels', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: const Text('Blocked YouTube Channels', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
+        iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFFEC4899)))
@@ -126,9 +126,9 @@ class _BlockedChannelsScreenState extends State<BlockedChannelsScreen> {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF334155)),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   child: const Row(
                     children: [
@@ -152,12 +152,12 @@ class _BlockedChannelsScreenState extends State<BlockedChannelsScreen> {
                     Expanded(
                       child: TextField(
                         controller: _channelController,
-                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14),
                         decoration: InputDecoration(
                           hintText: 'Enter YouTube channel name...',
                           hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
                           filled: true,
-                          fillColor: const Color(0xFF1E293B),
+                          fillColor: Colors.white,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: const BorderSide(color: Color(0xFF334155)),
@@ -175,7 +175,7 @@ class _BlockedChannelsScreenState extends State<BlockedChannelsScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: const Text('Add', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -219,9 +219,9 @@ class _BlockedChannelsScreenState extends State<BlockedChannelsScreen> {
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF334155)),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
                       child: Row(
                         children: [
@@ -230,7 +230,7 @@ class _BlockedChannelsScreenState extends State<BlockedChannelsScreen> {
                           Expanded(
                             child: Text(
                               channel,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                              style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w600, fontSize: 14),
                             ),
                           ),
                           IconButton(

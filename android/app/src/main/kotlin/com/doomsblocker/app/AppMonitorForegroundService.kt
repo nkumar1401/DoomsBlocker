@@ -46,6 +46,7 @@ class AppMonitorForegroundService : Service() {
     private var lastCheckTime = System.currentTimeMillis()
     private var lastNotifTimeSec = -1
     private var lastNotifLocked = false
+    private var lastNotifStudyZone = false
 
     private val monitorRunnable = object : Runnable {
         override fun run() {
@@ -66,15 +67,19 @@ class AppMonitorForegroundService : Service() {
     }
 
     private fun updateNotificationDynamic() {
-        val isLocked = prefs.isYouTubeLocked
-        val remainingSec = if (isLocked) {
+        val isStudyZone = prefs.isStudyZoneActive
+        val isLocked = prefs.isYouTubeLocked || isStudyZone
+        val remainingSec = if (isStudyZone) {
+            ((prefs.studyZoneExpireTimestamp - System.currentTimeMillis()) / 1000).toInt().coerceAtLeast(0)
+        } else if (prefs.isYouTubeLocked) {
             ((prefs.youtubeLockUntilTimestamp - System.currentTimeMillis()) / 1000).toInt().coerceAtLeast(0)
         } else {
             prefs.shortsUsedSecondsToday
         }
 
-        if (isLocked != lastNotifLocked || remainingSec != lastNotifTimeSec) {
+        if (isLocked != lastNotifLocked || isStudyZone != lastNotifStudyZone || remainingSec != lastNotifTimeSec) {
             lastNotifLocked = isLocked
+            lastNotifStudyZone = isStudyZone
             lastNotifTimeSec = remainingSec
             try {
                 notificationManager.notify(NOTIFICATION_ID, buildNotification())
@@ -98,14 +103,33 @@ class AppMonitorForegroundService : Service() {
         val fgPackage = getForegroundPackage(now) ?: return
 
         // 1. YouTube lock check
-        if (fgPackage == "com.google.android.youtube" && prefs.isYouTubeLocked) {
-            if (prefs.isNephewModeEnabled) {
-                Log.w(TAG, "Nephew Mode active: YouTube opened during active lock window! Ejecting...")
-                ejectToHome()
-                OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED)
-                return
+        if (fgPackage == "com.google.android.youtube") {
+            if (prefs.isKidsModeEnabled && prefs.youtubeLockUntilTimestamp > 0L && now >= prefs.youtubeLockUntilTimestamp) {
+                // Cooldown period expired! Reset usage
+                prefs.youtubeLockUntilTimestamp = 0L
+                prefs.shortsUsedSecondsToday = 0
             }
-            // In Adult Mode, normal YouTube app & longform video are permitted; Shorts is strictly blocked by AccessibilityService!
+            if (prefs.isYouTubeLocked) {
+                if (prefs.isKidsModeEnabled) {
+                    Log.w(TAG, "Kids Mode active: YouTube opened during active lock window! Ejecting...")
+                    ejectToHome()
+                    OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED)
+                    return
+                }
+                // In Adult Mode, normal YouTube app & longform video are permitted; Shorts is strictly blocked by AccessibilityService!
+            }
+        }
+
+        // 1.1 Kids Mode Social Media 24/7 Block
+        if (prefs.isKidsModeEnabled && isSocialOrDistractionApp(fgPackage)) {
+            Log.w(TAG, "Kids Mode active: Social app $fgPackage is blocked 24/7!")
+            ejectToHome()
+            OverlayLockActivity.start(
+                this,
+                OverlayLockActivity.REASON_KIDS_SOCIAL_BLOCKED,
+                targetPackage = fgPackage
+            )
+            return
         }
 
         // 2. Study Zone distraction apps check
@@ -158,9 +182,14 @@ class AppMonitorForegroundService : Service() {
         return lower.contains("instagram") ||
                 lower.contains("snapchat") ||
                 lower.contains("tiktok") ||
-                lower.contains("facebook.katana") ||
+                lower.contains("facebook") ||
                 lower.contains("twitter") ||
-                lower.contains("reddit")
+                lower.contains("x.android") ||
+                lower.contains("reddit") ||
+                lower.contains("sharechat") ||
+                lower.contains("mohalla") ||
+                lower.contains("eterno") ||
+                lower.contains("josh")
     }
 
     private fun getForegroundPackage(now: Long): String? {
@@ -252,14 +281,20 @@ class AppMonitorForegroundService : Service() {
         if (isStudyZone) {
             val expire = prefs.studyZoneExpireTimestamp
             val remainingSec = ((expire - System.currentTimeMillis()) / 1000).toInt().coerceAtLeast(0)
-            val minutes = remainingSec / 60
+            val hours = remainingSec / 3600
+            val minutes = (remainingSec % 3600) / 60
             val seconds = remainingSec % 60
-            val timeFormatted = String.format(Locale.US, "%02d:%02d", minutes, seconds)
+            val timeFormatted = if (hours > 0) {
+                String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
+            } else {
+                String.format(Locale.US, "%02d:%02d", minutes, seconds)
+            }
 
             builder
-                .setContentTitle("📚 Study Zone Active • ${prefs.studyZoneName}")
+                .setContentTitle("📚 Study Zone: ${prefs.studyZoneName} • $timeFormatted")
                 .setContentText("Focus session in progress • $timeFormatted remaining (Distractions locked)")
-                .setColor(Color.parseColor("#EF4444"))
+                .setStyle(NotificationCompat.BigTextStyle().bigText("Focus session at ${prefs.studyZoneName}.\nTime remaining: $timeFormatted.\nInstagram, Shorts, and Games are locked until session finishes."))
+                .setColor(Color.parseColor("#06B6D4"))
                 .addAction(android.R.drawable.ic_menu_preferences, "Study Dashboard", pendingIntent)
         } else if (prefs.isYouTubeLocked) {
             val remainingMillis = prefs.youtubeLockUntilTimestamp - System.currentTimeMillis()
@@ -293,8 +328,8 @@ class AppMonitorForegroundService : Service() {
             val usedFormatted = String.format(Locale.US, "%02d:%02d", usedSec / 60, usedSec % 60)
             val limitFormatted = String.format(Locale.US, "%02d:%02d", limitSec / 60, limitSec % 60)
 
-            val modeText = if (prefs.isNephewModeEnabled) {
-                "Nephew Guard ON • Strict child protection active"
+            val modeText = if (prefs.isKidsModeEnabled) {
+                "Kids Mode ON • Strict child protection active"
             } else {
                 "Adult Mode • Shorts & Reels limit: ${prefs.shortsLimitMinutes} min"
             }

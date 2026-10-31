@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/installed_app_model.dart';
 import '../services/native_bridge.dart';
+import '../widgets/duration_picker_dialog.dart';
 
 class GameLimitsScreen extends StatefulWidget {
   const GameLimitsScreen({Key? key}) : super(key: key);
@@ -69,12 +70,12 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
     final restrictedCount = _allApps.where((a) => a.isRestricted).length;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFFF8FAFC),
         elevation: 0,
-        title: const Text('Game & App Time Limits', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: const Text('Game & App Time Limits', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
+        iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF3B82F6)))
@@ -85,9 +86,9 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF334155)),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,24 +98,49 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
                         children: [
                           const Text(
                             'Session Time Limit',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                            style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 15),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF3B82F6).withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              '$_gameLimitMinutes min',
-                              style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold),
+                          InkWell(
+                            onTap: () async {
+                              final selected = await DurationPickerDialog.show(
+                                context,
+                                title: 'Game Session Limit',
+                                description: 'Scroll hours and minutes allowed for games before lockdown.',
+                                initialMinutes: _gameLimitMinutes,
+                                minMinutes: 1,
+                                maxMinutes: 300,
+                                quickPresets: [10, 15, 20, 30, 45, 60, 90, 120],
+                              );
+                              if (selected != null) {
+                                _updateLimit(selected);
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF3B82F6).withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.4)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '$_gameLimitMinutes min',
+                                    style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.edit, size: 12, color: Color(0xFF3B82F6)),
+                                ],
+                              ),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Marked games will be auto-locked once your nephew plays for $_gameLimitMinutes minutes.',
+                        'Marked games will be auto-locked once played for $_gameLimitMinutes minutes during Kids Mode.',
                         style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                       ),
                       const SizedBox(height: 10),
@@ -138,13 +164,13 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
                   child: TextField(
                     controller: _searchController,
                     onChanged: (q) => setState(() => _filterApps(q)),
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'Search installed games or apps...',
                       hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
                       prefixIcon: const Icon(Icons.search, color: Color(0xFF64748B)),
                       filled: true,
-                      fillColor: const Color(0xFF1E293B),
+                      fillColor: Colors.white,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -214,15 +240,21 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
                             return Container(
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                               decoration: BoxDecoration(
-                                color: app.isRestricted
-                                    ? const Color(0xFF1E293B)
-                                    : const Color(0xFF161F2E),
-                                borderRadius: BorderRadius.circular(12),
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
                                   color: app.isRestricted
-                                      ? const Color(0xFF3B82F6).withOpacity(0.5)
-                                      : const Color(0xFF243044),
+                                      ? const Color(0xFF3B82F6)
+                                      : const Color(0xFFE2E8F0),
+                                  width: app.isRestricted ? 1.5 : 1.0,
                                 ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.02),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
                               child: Row(
                                 children: [
@@ -231,8 +263,8 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
                                     height: 40,
                                     decoration: BoxDecoration(
                                       color: app.isRestricted
-                                          ? const Color(0xFF3B82F6).withOpacity(0.2)
-                                          : const Color(0xFF0F172A),
+                                          ? const Color(0xFF3B82F6).withOpacity(0.12)
+                                          : const Color(0xFFF1F5F9),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Icon(
@@ -252,7 +284,7 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
                                               child: Text(
                                                 app.name,
                                                 style: const TextStyle(
-                                                  color: Colors.white,
+                                                  color: Color(0xFF0F172A),
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 14,
                                                 ),
@@ -265,14 +297,14 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
                                               Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                                                 decoration: BoxDecoration(
-                                                  color: const Color(0xFF8B5CF6).withOpacity(0.2),
+                                                  color: const Color(0xFF8B5CF6).withOpacity(0.12),
                                                   borderRadius: BorderRadius.circular(4),
-                                                  border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.5)),
+                                                  border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.3)),
                                                 ),
                                                 child: const Text(
                                                   'GAME',
                                                   style: TextStyle(
-                                                    color: Color(0xFFA78BFA),
+                                                    color: Color(0xFF7C3AED),
                                                     fontSize: 8.5,
                                                     fontWeight: FontWeight.bold,
                                                   ),
@@ -287,7 +319,7 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
                                           style: TextStyle(
                                             color: app.usedMinutes >= _gameLimitMinutes
                                                 ? const Color(0xFFEF4444)
-                                                : const Color(0xFF94A3B8),
+                                                : const Color(0xFF64748B),
                                             fontSize: 12,
                                           ),
                                         ),
@@ -318,16 +350,23 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF3B82F6) : const Color(0xFF1E293B),
+          color: isSelected ? const Color(0xFF3B82F6) : Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? const Color(0xFF3B82F6) : const Color(0xFF334155),
+            color: isSelected ? const Color(0xFF3B82F6) : const Color(0xFFE2E8F0),
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
+          ],
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+            color: isSelected ? Colors.white : const Color(0xFF64748B),
             fontSize: 12,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
           ),

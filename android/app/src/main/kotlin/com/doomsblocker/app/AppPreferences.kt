@@ -28,6 +28,14 @@ class AppPreferences(context: Context) {
         private const val KEY_STUDY_ZONE_NAME = "study_zone_name"
         private const val KEY_STUDY_ZONE_START = "study_zone_start"
         private const val KEY_STUDY_ZONE_EXPIRE = "study_zone_expire"
+        private const val KEY_ENABLED_SHORT_FORM_APPS = "enabled_short_form_apps"
+
+        const val PKG_YOUTUBE = "com.google.android.youtube"
+        const val PKG_INSTAGRAM = "com.instagram.android"
+        const val PKG_SNAPCHAT = "com.snapchat.android"
+        const val PKG_SHARECHAT = "in.mohalla.sharechat"
+        const val PKG_MOJ = "in.mohalla.video"
+        const val PKG_JOSH = "com.eterno.shortvideos"
     }
 
     init {
@@ -96,6 +104,18 @@ class AppPreferences(context: Context) {
     var isNephewModeEnabled: Boolean
         get() = prefs.getBoolean(KEY_NEPHEW_MODE, false)
         set(value) = prefs.edit().putBoolean(KEY_NEPHEW_MODE, value).apply()
+
+    var isKidsModeEnabled: Boolean
+        get() = isNephewModeEnabled
+        set(value) { isNephewModeEnabled = value }
+
+    var enabledShortFormApps: Set<String>
+        get() = prefs.getStringSet(KEY_ENABLED_SHORT_FORM_APPS, setOf(PKG_YOUTUBE, PKG_INSTAGRAM)) ?: setOf(PKG_YOUTUBE, PKG_INSTAGRAM)
+        set(value) = prefs.edit().putStringSet(KEY_ENABLED_SHORT_FORM_APPS, value).apply()
+
+    fun isShortFormMonitored(packageName: String): Boolean {
+        return enabledShortFormApps.contains(packageName)
+    }
 
     var parentPin: String
         get() = prefs.getString(KEY_PARENT_PIN, "") ?: ""

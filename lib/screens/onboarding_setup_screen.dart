@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/native_bridge.dart';
 import '../widgets/create_pin_dialog.dart';
+import '../widgets/accessibility_guide_dialog.dart';
 import 'dashboard_screen.dart';
 
 class OnboardingSetupScreen extends StatefulWidget {
@@ -17,6 +18,7 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
     'accessibility': false,
     'overlay': false,
     'usageStats': false,
+    'notification': false,
   };
   String _manufacturer = '';
 
@@ -89,7 +91,7 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: Color(0xFF0F172A),
+        backgroundColor: Color(0xFFF8FAFC),
         body: Center(
           child: CircularProgressIndicator(color: Color(0xFF06B6D4)),
         ),
@@ -97,7 +99,7 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
         child: Column(
           children: [
@@ -109,24 +111,26 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
                   // App Icon & Header
                   Center(
                     child: Container(
-                      width: 64,
-                      height: 64,
+                      width: 68,
+                      height: 68,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF06B6D4), Color(0xFF3B82F6)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF06B6D4).withOpacity(0.35),
+                            color: const Color(0xFF06B6D4).withOpacity(0.3),
                             blurRadius: 16,
                             offset: const Offset(0, 6),
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.shield_rounded, color: Colors.white, size: 34),
+                      child: ClipOval(
+                        child: Image.asset(
+                          'assets/images/app_logo.png',
+                          width: 68,
+                          height: 68,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -134,7 +138,7 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
                     child: Text(
                       'Welcome to DoomsBlocker',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: Color(0xFF0F172A),
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                       ),
@@ -146,7 +150,7 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
                       'Complete initial setup to protect your screen time.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Color(0xFF94A3B8),
+                        color: Color(0xFF64748B),
                         fontSize: 13,
                       ),
                     ),
@@ -168,14 +172,14 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         backgroundColor: _isPinSet
-                            ? const Color(0xFF10B981).withOpacity(0.15)
-                            : const Color(0xFFF59E0B).withOpacity(0.15),
+                            ? const Color(0xFF10B981).withOpacity(0.12)
+                            : const Color(0xFFF59E0B).withOpacity(0.12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                       child: Text(
                         _isPinSet ? 'CHANGE' : 'CREATE PIN',
                         style: TextStyle(
-                          color: _isPinSet ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                          color: _isPinSet ? const Color(0xFF047857) : const Color(0xFFB45309),
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),
@@ -198,10 +202,10 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
                         ? const Color(0xFF10B981)
                         : const Color(0xFF06B6D4),
                     title: 'Accessibility Service',
-                    subtitle: 'Detects YouTube Shorts and blocks doomscrolling.',
+                    subtitle: 'Detects YouTube Shorts and blocks doomscrolling.\n(Tap to see OEM guide & avoid restricted setting)', 
                     actionButton: _buildPermissionButton(
                       isGranted: _permissions['accessibility'] ?? false,
-                      onTap: () => NativeBridge.openAccessibilitySettings(),
+                      onTap: () => AccessibilityGuideDialog.show(context, manufacturer: _manufacturer),
                     ),
                   ),
 
@@ -241,6 +245,28 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
                     ),
                   ),
 
+                  const SizedBox(height: 10),
+
+                  // 4. Notifications (Android 13+ 1-Tap System Popup)
+                  _buildCard(
+                    icon: (_permissions['notification'] ?? false)
+                        ? Icons.check_circle_rounded
+                        : Icons.notifications_active_rounded,
+                    iconColor: (_permissions['notification'] ?? false)
+                        ? const Color(0xFF10B981)
+                        : const Color(0xFF3B82F6),
+                    title: 'Live Countdown Notifications',
+                    subtitle: 'Shows real-time countdown progress and emergency unlock actions.',
+                    actionButton: _buildPermissionButton(
+                      isGranted: _permissions['notification'] ?? false,
+                      onTap: () async {
+                        await NativeBridge.requestNotificationPermission();
+                        await Future.delayed(const Duration(milliseconds: 600));
+                        _refreshStatus();
+                      },
+                    ),
+                  ),
+
                   // Optional OEM Background Setup
                   if (_isAggressiveOem) ...[
                     const SizedBox(height: 24),
@@ -248,20 +274,20 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
                     const SizedBox(height: 10),
                     _buildCard(
                       icon: Icons.bolt_rounded,
-                      iconColor: const Color(0xFF38BDF8),
+                      iconColor: const Color(0xFF0284C7),
                       title: 'Autostart & Battery Optimization',
                       subtitle: 'Allow autostart for 100% reliable lock screens on $_manufacturer.',
                       actionButton: TextButton(
                         onPressed: () => NativeBridge.openBatteryOptimizationSettings(),
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          backgroundColor: const Color(0xFF38BDF8).withOpacity(0.15),
+                          backgroundColor: const Color(0xFF0284C7).withOpacity(0.12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                         child: const Text(
                           'OPEN',
                           style: TextStyle(
-                            color: Color(0xFF38BDF8),
+                            color: Color(0xFF0284C7),
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
@@ -278,10 +304,10 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
             // Bottom CTA Button
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E293B).withOpacity(0.95),
-                border: const Border(
-                  top: BorderSide(color: Color(0xFF334155), width: 1),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(
+                  top: BorderSide(color: Color(0xFFE2E8F0), width: 1),
                 ),
               ),
               child: SizedBox(
@@ -290,12 +316,12 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
                 child: ElevatedButton(
                   onPressed: _isReady ? _proceedToDashboard : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _isReady ? const Color(0xFF06B6D4) : const Color(0xFF334155),
-                    disabledBackgroundColor: const Color(0xFF334155),
+                    backgroundColor: _isReady ? const Color(0xFF06B6D4) : const Color(0xFFCBD5E1),
+                    disabledBackgroundColor: const Color(0xFFCBD5E1),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    elevation: _isReady ? 6 : 0,
+                    elevation: _isReady ? 3 : 0,
                   ),
                   child: Text(
                     _isReady ? 'CONTINUE TO DASHBOARD' : 'COMPLETE STEPS ABOVE TO CONTINUE',
@@ -339,9 +365,16 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B).withOpacity(0.7),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF334155)),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -361,7 +394,7 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
                 Text(
                   title,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: Color(0xFF0F172A),
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
                   ),
@@ -370,7 +403,7 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
                 Text(
                   subtitle,
                   style: const TextStyle(
-                    color: Color(0xFF94A3B8),
+                    color: Color(0xFF64748B),
                     fontSize: 12,
                     height: 1.3,
                   ),
@@ -393,7 +426,7 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFF10B981).withOpacity(0.15),
+          color: const Color(0xFF10B981).withOpacity(0.12),
           borderRadius: BorderRadius.circular(10),
         ),
         child: const Row(
@@ -404,7 +437,7 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
             Text(
               'ACTIVE',
               style: TextStyle(
-                color: Color(0xFF10B981),
+                color: Color(0xFF047857),
                 fontWeight: FontWeight.bold,
                 fontSize: 11,
               ),
@@ -418,13 +451,13 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
       onPressed: onTap,
       style: TextButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        backgroundColor: const Color(0xFF06B6D4).withOpacity(0.15),
+        backgroundColor: const Color(0xFF06B6D4).withOpacity(0.12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
       child: const Text(
         'GRANT',
         style: TextStyle(
-          color: Color(0xFF06B6D4),
+          color: Color(0xFF0284C7),
           fontWeight: FontWeight.bold,
           fontSize: 12,
         ),
@@ -432,4 +465,3 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
     );
   }
 }
-

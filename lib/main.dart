@@ -3,17 +3,23 @@ import 'package:flutter/services.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/onboarding_setup_screen.dart';
 import 'services/native_bridge.dart';
+import 'services/notification_update_service.dart';
+import 'services/auth_service.dart';
+import 'services/subscription_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await NotificationUpdateService.instance.initialize();
+  await AuthService().init();
+  await SubscriptionService().init();
 
-  // Set system UI overlay style to dark
+  // Set system UI overlay style to clean bright silver-white
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Color(0xFF0F172A),
-      systemNavigationBarIconBrightness: Brightness.light,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Color(0xFFF8FAFC),
+      systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
 
@@ -29,13 +35,14 @@ class DoomsBlockerApp extends StatelessWidget {
       title: 'DoomsBlocker',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0F172A),
-        primaryColor: const Color(0xFFEF4444),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFEF4444),
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+        cardColor: Colors.white,
+        primaryColor: const Color(0xFF06B6D4),
+        colorScheme: const ColorScheme.light(
+          primary: Color(0xFF06B6D4),
           secondary: Color(0xFF3B82F6),
-          surface: Color(0xFF1E293B),
+          surface: Colors.white,
         ),
         fontFamily: 'Roboto',
       ),
@@ -80,7 +87,7 @@ class _AppGatewayScreenState extends State<AppGatewayScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: Color(0xFF0F172A),
+        backgroundColor: Color(0xFFF8FAFC),
         body: Center(
           child: CircularProgressIndicator(color: Color(0xFF06B6D4)),
         ),
@@ -94,4 +101,3 @@ class _AppGatewayScreenState extends State<AppGatewayScreen> {
     return const DashboardScreen();
   }
 }
-

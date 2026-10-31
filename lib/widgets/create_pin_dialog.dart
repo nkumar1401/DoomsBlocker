@@ -2,13 +2,18 @@ import 'package:flutter/material.dart';
 import '../services/native_bridge.dart';
 
 class CreatePinDialog extends StatefulWidget {
-  const CreatePinDialog({Key? key}) : super(key: key);
+  final bool isUpdating;
 
-  static Future<bool> show(BuildContext context) async {
+  const CreatePinDialog({
+    Key? key,
+    this.isUpdating = false,
+  }) : super(key: key);
+
+  static Future<bool> show(BuildContext context, {bool isUpdating = false}) async {
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => const CreatePinDialog(),
+      builder: (ctx) => CreatePinDialog(isUpdating: isUpdating),
     );
     return result == true;
   }
@@ -21,7 +26,7 @@ class _CreatePinDialogState extends State<CreatePinDialog> {
   final TextEditingController _pinController = TextEditingController();
   final TextEditingController _confirmController = TextEditingController();
   
-  int _step = 1; // 1: Create, 2: Confirm
+  int _step = 1; // 1: Create/Set, 2: Confirm
   String _firstPin = '';
   String? _errorMessage;
   bool _isSaving = false;
@@ -56,9 +61,13 @@ class _CreatePinDialogState extends State<CreatePinDialog> {
       setState(() => _isSaving = false);
       if (ok) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Security PIN created successfully!'),
-            backgroundColor: Color(0xFF10B981),
+          SnackBar(
+            content: Text(
+              widget.isUpdating
+                  ? 'New Security PIN set successfully!'
+                  : 'Security PIN created successfully!',
+            ),
+            backgroundColor: const Color(0xFF10B981),
           ),
         );
         Navigator.of(context).pop(true);
@@ -70,15 +79,32 @@ class _CreatePinDialogState extends State<CreatePinDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final title = widget.isUpdating
+        ? (_step == 1 ? 'Set New Security PIN' : 'Confirm New Security PIN')
+        : (_step == 1 ? 'Create Security PIN' : 'Confirm Security PIN');
+
+    final subtitle = widget.isUpdating
+        ? (_step == 1
+            ? 'Choose a new 4-digit PIN to protect your settings, channel blocks, and app limits.'
+            : 'Re-enter your new 4-digit PIN to confirm.')
+        : (_step == 1
+            ? 'Choose a 4-digit PIN to protect your settings, channel blocks, and app limits.'
+            : 'Re-enter your 4-digit PIN to confirm.');
+
+    final confirmBtnLabel = widget.isUpdating ? 'Save New PIN' : 'Set PIN';
+
     return AlertDialog(
-      backgroundColor: const Color(0xFF1E293B),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
       title: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFF06B6D4).withOpacity(0.15),
+              color: const Color(0xFF06B6D4).withOpacity(0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(Icons.shield_outlined, color: Color(0xFF06B6D4), size: 22),
@@ -86,8 +112,12 @@ class _CreatePinDialogState extends State<CreatePinDialog> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              _step == 1 ? 'Create Security PIN' : 'Confirm Security PIN',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+              title,
+              style: const TextStyle(
+                color: Color(0xFF0F172A),
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
             ),
           ),
         ],
@@ -97,10 +127,8 @@ class _CreatePinDialogState extends State<CreatePinDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            _step == 1
-                ? 'Choose a 4-digit PIN to protect your settings, channel blocks, and app limits.'
-                : 'Re-enter your 4-digit PIN to confirm.',
-            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.4),
+            subtitle,
+            style: const TextStyle(color: Color(0xFF64748B), fontSize: 13, height: 1.4),
           ),
           const SizedBox(height: 20),
           TextField(
@@ -111,20 +139,24 @@ class _CreatePinDialogState extends State<CreatePinDialog> {
             textAlign: TextAlign.center,
             autofocus: true,
             style: const TextStyle(
-              color: Colors.white,
+              color: Color(0xFF0F172A),
               fontSize: 26,
               letterSpacing: 10,
               fontWeight: FontWeight.bold,
             ),
             decoration: InputDecoration(
               hintText: '••••',
-              hintStyle: const TextStyle(color: Color(0xFF64748B), letterSpacing: 10),
+              hintStyle: const TextStyle(color: Color(0xFF94A3B8), letterSpacing: 10),
               counterText: '',
               filled: true,
-              fillColor: const Color(0xFF0F172A),
+              fillColor: const Color(0xFFF8FAFC),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFF334155)),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -160,7 +192,7 @@ class _CreatePinDialogState extends State<CreatePinDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel', style: TextStyle(color: Color(0xFF94A3B8))),
+          child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
         ),
         ElevatedButton(
           onPressed: _isSaving
@@ -176,6 +208,7 @@ class _CreatePinDialogState extends State<CreatePinDialog> {
             backgroundColor: const Color(0xFF06B6D4),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            elevation: 0,
           ),
           child: _isSaving
               ? const SizedBox(
@@ -184,7 +217,7 @@ class _CreatePinDialogState extends State<CreatePinDialog> {
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                 )
               : Text(
-                  _step == 1 ? 'Continue' : 'Set PIN',
+                  _step == 1 ? 'Continue' : confirmBtnLabel,
                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                 ),
         ),

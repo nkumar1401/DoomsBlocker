@@ -24,6 +24,10 @@ class DoomsAccessibilityService : AccessibilityService() {
         private const val TAG = "DoomsAccessibility"
         private const val YOUTUBE_PACKAGE = "com.google.android.youtube"
         private const val INSTAGRAM_PACKAGE = "com.instagram.android"
+        private const val SNAPCHAT_PACKAGE = "com.snapchat.android"
+        private const val SHARECHAT_PACKAGE = "in.mohalla.sharechat"
+        private const val MOJ_PACKAGE = "in.mohalla.video"
+        private const val JOSH_PACKAGE = "com.eterno.shortvideos"
     }
 
     private lateinit var prefs: AppPreferences
@@ -32,6 +36,8 @@ class DoomsAccessibilityService : AccessibilityService() {
     private var activePackage: String? = null
     private var isInsideShorts = false
     private var isInsideReels = false
+    private var isInsideSpotlight = false
+    private var isInsidePureShortForm = false
     private var lastActiveTimeMillis = 0L
     private var lastLockActionTimeMillis = 0L
 
@@ -173,6 +179,79 @@ class DoomsAccessibilityService : AccessibilityService() {
         "com.instagram.android:id/view_pager"
     )
 
+    private val snapchatSpotlightViewIds = listOf(
+        "com.snapchat.android:id/spotlight_tab",
+        "com.snapchat.android:id/spotlight_recycler",
+        "com.snapchat.android:id/spotlight_fragment",
+        "com.snapchat.android:id/spotlight_viewer",
+        "com.snapchat.android:id/spotlight_page_container",
+        "com.snapchat.android:id/vertical_player_page",
+        "com.snapchat.android:id/spotlight_fullscreen",
+        "com.snapchat.android:id/spotlight_video_container"
+    )
+
+    private fun isPureShortFormPackage(pkgName: String): Boolean {
+        return pkgName == SHARECHAT_PACKAGE ||
+               pkgName == MOJ_PACKAGE ||
+               pkgName == JOSH_PACKAGE
+    }
+
+    private fun detectSnapchatSpotlightPresence(root: AccessibilityNodeInfo): Boolean {
+        // Immunity for Chat & Camera: If chat input or conversation list is active, it is NOT Spotlight!
+        val chatNodes = root.findAccessibilityNodeInfosByViewId("com.snapchat.android:id/chat_input_text")
+        if (!chatNodes.isNullOrEmpty()) {
+            chatNodes.forEach { it.recycle() }
+            return false
+        }
+        val conversationNodes = root.findAccessibilityNodeInfosByViewId("com.snapchat.android:id/conversation_list")
+        if (!conversationNodes.isNullOrEmpty()) {
+            conversationNodes.forEach { it.recycle() }
+            return false
+        }
+
+        for (id in snapchatSpotlightViewIds) {
+            val nodes = root.findAccessibilityNodeInfosByViewId(id)
+            if (!nodes.isNullOrEmpty()) {
+                nodes.forEach { it.recycle() }
+                return true
+            }
+        }
+        return scanForSnapchatSpotlightIndicators(root, 0)
+    }
+
+    private fun scanForSnapchatSpotlightIndicators(node: AccessibilityNodeInfo?, depth: Int): Boolean {
+        if (node == null || depth > 25) return false
+
+        val resId = node.viewIdResourceName
+        if (resId != null) {
+            val lowerId = resId.lowercase(Locale.US)
+            if (lowerId.contains("spotlight") && !lowerId.contains("icon") && !lowerId.contains("tab_icon")) {
+                return true
+            }
+        }
+
+        val desc = node.contentDescription?.toString()
+        if (desc != null) {
+            val lowerDesc = desc.lowercase(Locale.US)
+            if (lowerDesc.contains("remix this snap") ||
+                lowerDesc.contains("sound used in this snap") ||
+                lowerDesc.contains("spotlight video") ||
+                (lowerDesc.contains("spotlight") && lowerDesc.contains("selected"))) {
+                return true
+            }
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            if (child != null) {
+                val found = scanForSnapchatSpotlightIndicators(child, depth + 1)
+                child.recycle()
+                if (found) return true
+            }
+        }
+        return false
+    }
+
     // Periodic 1-second tick to continuously track active screen time in background
     private val tickerRunnable = object : Runnable {
         override fun run() {
@@ -211,10 +290,29 @@ class DoomsAccessibilityService : AccessibilityService() {
 
         activePackage = pkgName
 
-        if (pkgName == YOUTUBE_PACKAGE) {
+        // Kids Mode Social Media Check: Complete 24/7 block
+        if (prefs.isKidsModeEnabled && isSocialOrDistractionApp(pkgName)) {
+            if (canTriggerLockAction()) {
+                Log.w(TAG, "Kids Mode Active: Social app $pkgName blocked 24/7! Showing lock overlay...")
+                destroyBackgroundMediaAndPlayer(pkgName)
+                dismissPictureInPictureIfPresent()
+                OverlayLockActivity.start(
+                    this,
+                    OverlayLockActivity.REASON_KIDS_SOCIAL_BLOCKED,
+                    targetPackage = pkgName
+                )
+            }
+            return
+        }
+
+        if (pkgName == YOUTUBE_PACKAGE && prefs.isShortFormMonitored(YOUTUBE_PACKAGE)) {
             handleYouTubeEvent(event)
-        } else if (pkgName == INSTAGRAM_PACKAGE) {
+        } else if (pkgName == INSTAGRAM_PACKAGE && prefs.isShortFormMonitored(INSTAGRAM_PACKAGE)) {
             handleInstagramEvent(event)
+        } else if (pkgName == SNAPCHAT_PACKAGE && prefs.isShortFormMonitored(SNAPCHAT_PACKAGE)) {
+            handleSnapchatEvent(event)
+        } else if (isPureShortFormPackage(pkgName) && prefs.isShortFormMonitored(pkgName)) {
+            handlePureShortFormEvent(event, pkgName)
         } else if (prefs.isStudyZoneActive && isSocialOrDistractionApp(pkgName)) {
             handleStudyZoneDistractionEvent(pkgName)
         } else if (prefs.restrictedApps.contains(pkgName)) {
@@ -222,6 +320,8 @@ class DoomsAccessibilityService : AccessibilityService() {
         } else {
             isInsideShorts = false
             isInsideReels = false
+            isInsideSpotlight = false
+            isInsidePureShortForm = false
         }
     }
 
@@ -246,18 +346,61 @@ class DoomsAccessibilityService : AccessibilityService() {
             }
         }
 
+        // 0.1 Kids Mode: 0-second instant lockout for YouTube Shorts!
+        if (prefs.isKidsModeEnabled) {
+            val rootNode = rootInActiveWindow
+            if (rootNode != null) {
+                try {
+                    val inShortsNow = detectShortsPresence(rootNode)
+                    if (inShortsNow) {
+                        if (!canTriggerLockAction()) return
+                        Log.d(TAG, "Kids Mode Active: Shorts opened! Zero-tolerance 0s block. Showing lock overlay...")
+                        destroyBackgroundMediaAndPlayer(YOUTUBE_PACKAGE)
+                        dismissPictureInPictureIfPresent()
+                        OverlayLockActivity.start(
+                            this,
+                            OverlayLockActivity.REASON_KIDS_SHORTS_BLOCKED,
+                            targetPackage = YOUTUBE_PACKAGE
+                        )
+                        return
+                    }
+                } finally {
+                    rootNode.recycle()
+                }
+            }
+        }
+
         // 1. Strict Lockout handling
-        if (prefs.isYouTubeLocked) {
-            if (prefs.isNephewModeEnabled) {
-                // Nephew Mode: Lock ENTIRE YouTube application
+        val now = System.currentTimeMillis()
+        if (prefs.isKidsModeEnabled) {
+            // Check if 30-minute cooldown is active
+            if (prefs.youtubeLockUntilTimestamp > now) {
                 if (!canTriggerLockAction()) return
-                Log.d(TAG, "Nephew Mode active & YouTube locked! Showing lock overlay...")
+                Log.d(TAG, "Kids Mode Active: YouTube in 30-min cooldown! Showing lock overlay...")
                 destroyBackgroundMediaAndPlayer(YOUTUBE_PACKAGE)
                 dismissPictureInPictureIfPresent()
                 OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = YOUTUBE_PACKAGE)
                 return
-            } else {
-                // Adult Mode: Allow longform videos, but immediately kick out if user tries to enter Shorts!
+            } else if (prefs.youtubeLockUntilTimestamp > 0L) {
+                // Cooldown expired! Reset allowance for new session
+                prefs.youtubeLockUntilTimestamp = 0L
+                prefs.shortsUsedSecondsToday = 0
+            }
+
+            // Check if daily session limit reached
+            if (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60) {
+                if (!canTriggerLockAction()) return
+                Log.w(TAG, "Kids Mode: YouTube limit reached (${prefs.shortsUsedSecondsToday}s)! Setting 30-min cooldown...")
+                prefs.youtubeLockUntilTimestamp = now + 30 * 60 * 1000L
+                destroyBackgroundMediaAndPlayer(YOUTUBE_PACKAGE)
+                dismissPictureInPictureIfPresent()
+                OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = YOUTUBE_PACKAGE)
+                return
+            }
+        } else {
+            // Adult Focus Mode
+            val isYtLockedNow = prefs.isYouTubeLocked
+            if (isYtLockedNow) {
                 val rootNode = rootInActiveWindow
                 if (rootNode != null) {
                     try {
@@ -590,6 +733,68 @@ class DoomsAccessibilityService : AccessibilityService() {
         isInsideReels = true
     }
 
+    private fun handleSnapchatEvent(event: AccessibilityEvent) {
+        val rootNode = rootInActiveWindow
+        if (rootNode != null) {
+            try {
+                isInsideSpotlight = detectSnapchatSpotlightPresence(rootNode)
+            } finally {
+                rootNode.recycle()
+            }
+        }
+
+        if (isInsideSpotlight) {
+            val now = System.currentTimeMillis()
+            val isShortFormLocked = prefs.youtubeLockUntilTimestamp > now ||
+                (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
+
+            if (isShortFormLocked) {
+                if (!canTriggerLockAction()) return
+                Log.d(TAG, "Snapchat Spotlight active during short-form lockout! Ejecting...")
+                destroyBackgroundMediaAndPlayer(SNAPCHAT_PACKAGE)
+                OverlayLockActivity.start(
+                    this,
+                    OverlayLockActivity.REASON_SHORTS_LIMIT,
+                    targetPackage = SNAPCHAT_PACKAGE
+                )
+            }
+        }
+    }
+
+    private fun handlePureShortFormEvent(event: AccessibilityEvent, pkgName: String) {
+        isInsidePureShortForm = true
+
+        // Kids Mode: 0-second tolerance for all pure short-form clones (ShareChat, Moj, Josh)
+        if (prefs.isKidsModeEnabled) {
+            if (!canTriggerLockAction()) return
+            Log.d(TAG, "Kids Mode: Pure short-form app $pkgName 0s lockout! Showing lock overlay...")
+            destroyBackgroundMediaAndPlayer(pkgName)
+            dismissPictureInPictureIfPresent()
+            OverlayLockActivity.start(
+                this,
+                OverlayLockActivity.REASON_KIDS_SHORTS_BLOCKED,
+                targetPackage = pkgName
+            )
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        val isShortFormLocked = prefs.youtubeLockUntilTimestamp > now ||
+            (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
+
+        if (isShortFormLocked) {
+            if (!canTriggerLockAction()) return
+            Log.d(TAG, "Pure short-form app $pkgName active during lockout! Showing lock overlay...")
+            destroyBackgroundMediaAndPlayer(pkgName)
+            dismissPictureInPictureIfPresent()
+            OverlayLockActivity.start(
+                this,
+                OverlayLockActivity.REASON_SHORTS_LIMIT,
+                targetPackage = pkgName
+            )
+        }
+    }
+
     private fun handleStudyZoneDistractionEvent(pkgName: String) {
         if (!canTriggerLockAction()) return
         Log.w(TAG, "Study Zone Active: Distraction app $pkgName blocked! Showing smooth lock...")
@@ -726,9 +931,11 @@ class DoomsAccessibilityService : AccessibilityService() {
         val rootNode = rootInActiveWindow
         val windowPkg = rootNode?.packageName?.toString() ?: activePackage
 
-        if (windowPkg == YOUTUBE_PACKAGE) {
+        if (windowPkg == YOUTUBE_PACKAGE && prefs.isShortFormMonitored(YOUTUBE_PACKAGE)) {
             activePackage = YOUTUBE_PACKAGE
             isInsideReels = false
+            isInsideSpotlight = false
+            isInsidePureShortForm = false
             if (rootNode != null) {
                 try {
                     isInsideShorts = detectShortsPresence(rootNode)
@@ -737,10 +944,23 @@ class DoomsAccessibilityService : AccessibilityService() {
                     Log.e(TAG, "Error in YouTube periodic tick: ${e.message}")
                 }
             }
-        } else if (windowPkg == INSTAGRAM_PACKAGE) {
+
+            if (prefs.isKidsModeEnabled) {
+                val isYtLocked = prefs.youtubeLockUntilTimestamp > now ||
+                    (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
+                if (isYtLocked && canTriggerLockAction()) {
+                    Log.w(TAG, "Periodic tick: Kids Mode active and YouTube limit reached! Ejecting...")
+                    destroyBackgroundMediaAndPlayer(YOUTUBE_PACKAGE)
+                    dismissPictureInPictureIfPresent()
+                    OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = YOUTUBE_PACKAGE)
+                }
+            }
+        } else if (windowPkg == INSTAGRAM_PACKAGE && prefs.isShortFormMonitored(INSTAGRAM_PACKAGE)) {
             activePackage = INSTAGRAM_PACKAGE
             isInsideShorts = false
             isInsideReels = true
+            isInsideSpotlight = false
+            isInsidePureShortForm = false
 
             val isShortFormLocked = prefs.youtubeLockUntilTimestamp > now ||
                 (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
@@ -756,38 +976,100 @@ class DoomsAccessibilityService : AccessibilityService() {
                     )
                 }
             }
+        } else if (windowPkg == SNAPCHAT_PACKAGE && prefs.isShortFormMonitored(SNAPCHAT_PACKAGE)) {
+            activePackage = SNAPCHAT_PACKAGE
+            isInsideShorts = false
+            isInsideReels = false
+            isInsidePureShortForm = false
+            if (rootNode != null) {
+                try {
+                    isInsideSpotlight = detectSnapchatSpotlightPresence(rootNode)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in Snapchat periodic tick: ${e.message}")
+                }
+            }
+            if (isInsideSpotlight) {
+                val isShortFormLocked = prefs.youtubeLockUntilTimestamp > now ||
+                    (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
+                if (isShortFormLocked && canTriggerLockAction()) {
+                    destroyBackgroundMediaAndPlayer(SNAPCHAT_PACKAGE)
+                    OverlayLockActivity.start(
+                        this,
+                        OverlayLockActivity.REASON_SHORTS_LIMIT,
+                        targetPackage = SNAPCHAT_PACKAGE
+                    )
+                }
+            }
+        } else if (windowPkg != null && isPureShortFormPackage(windowPkg) && prefs.isShortFormMonitored(windowPkg)) {
+            activePackage = windowPkg
+            isInsideShorts = false
+            isInsideReels = false
+            isInsideSpotlight = false
+            isInsidePureShortForm = true
+            val isShortFormLocked = prefs.youtubeLockUntilTimestamp > now ||
+                (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
+            if (isShortFormLocked && canTriggerLockAction()) {
+                destroyBackgroundMediaAndPlayer(windowPkg)
+                dismissPictureInPictureIfPresent()
+                OverlayLockActivity.start(
+                    this,
+                    OverlayLockActivity.REASON_SHORTS_LIMIT,
+                    targetPackage = windowPkg
+                )
+            }
         } else {
             isInsideShorts = false
             isInsideReels = false
+            isInsideSpotlight = false
+            isInsidePureShortForm = false
         }
 
-        // 1. Unified Short-Form (YouTube Shorts & Instagram Reels) Screen Time Tracking
-        val isShortFormActive = (activePackage == YOUTUBE_PACKAGE && isInsideShorts) ||
-                                (activePackage == INSTAGRAM_PACKAGE && isInsideReels)
-
-        if (isShortFormActive) {
-            prefs.addShortsUsedSeconds(deltaSeconds)
-            val usedSec = prefs.shortsUsedSecondsToday
-            val limitSec = prefs.shortsLimitMinutes * 60
-            val targetPkg = activePackage ?: YOUTUBE_PACKAGE
-
-            Log.d(TAG, "Unified Short-Form Active ($targetPkg): $usedSec s / $limitSec s limit (Limit: ${prefs.shortsLimitMinutes} min)")
-
-            if (usedSec >= limitSec) {
-                if (!canTriggerLockAction()) return
-                Log.w(TAG, "Shorts/Reels limit hit ($usedSec >= $limitSec s)! Enforcing Lockout for ${prefs.shortsLockDurationMinutes} min!")
-                val lockDurationMillis = prefs.shortsLockDurationMinutes * 60 * 1000L
-                prefs.youtubeLockUntilTimestamp = now + lockDurationMillis
-
-                destroyBackgroundMediaAndPlayer(targetPkg)
-                dismissPictureInPictureIfPresent()
-                if (prefs.isNephewModeEnabled && targetPkg == YOUTUBE_PACKAGE) {
-                    OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = YOUTUBE_PACKAGE)
-                } else {
-                    OverlayLockActivity.start(this, OverlayLockActivity.REASON_SHORTS_LIMIT, targetPackage = targetPkg)
+        // 1. Screen Time Tracking
+        if (prefs.isKidsModeEnabled) {
+            // Kids Mode: Only long-form YouTube increments screen time (Shorts is ejected with 0s tolerance)
+            if (activePackage == YOUTUBE_PACKAGE) {
+                prefs.addShortsUsedSeconds(deltaSeconds)
+                val usedSec = prefs.shortsUsedSecondsToday
+                val limitSec = prefs.shortsLimitMinutes * 60
+                if (usedSec >= limitSec) {
+                    if (canTriggerLockAction()) {
+                        Log.w(TAG, "Kids Mode: Long-form YouTube limit reached ($usedSec >= $limitSec s)! Setting 30m cooldown...")
+                        prefs.youtubeLockUntilTimestamp = now + 30 * 60 * 1000L
+                        destroyBackgroundMediaAndPlayer(YOUTUBE_PACKAGE)
+                        dismissPictureInPictureIfPresent()
+                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = YOUTUBE_PACKAGE)
+                    }
                 }
-                isInsideShorts = false
-                isInsideReels = false
+            }
+        } else {
+            // Adult Focus Mode: Unified short-form tracking
+            val isShortFormActive = (activePackage == YOUTUBE_PACKAGE && isInsideShorts) ||
+                                    (activePackage == INSTAGRAM_PACKAGE && isInsideReels) ||
+                                    (activePackage == SNAPCHAT_PACKAGE && isInsideSpotlight) ||
+                                    (isInsidePureShortForm)
+
+            if (isShortFormActive) {
+                prefs.addShortsUsedSeconds(deltaSeconds)
+                val usedSec = prefs.shortsUsedSecondsToday
+                val limitSec = prefs.shortsLimitMinutes * 60
+                val targetPkg = activePackage ?: YOUTUBE_PACKAGE
+
+                Log.d(TAG, "Unified Short-Form Active ($targetPkg): $usedSec s / $limitSec s limit (Limit: ${prefs.shortsLimitMinutes} min)")
+
+                if (usedSec >= limitSec) {
+                    if (!canTriggerLockAction()) return
+                    Log.w(TAG, "Shorts/Reels limit hit ($usedSec >= $limitSec s)! Enforcing Lockout for ${prefs.shortsLockDurationMinutes} min!")
+                    val lockDurationMillis = prefs.shortsLockDurationMinutes * 60 * 1000L
+                    prefs.youtubeLockUntilTimestamp = now + lockDurationMillis
+
+                    destroyBackgroundMediaAndPlayer(targetPkg)
+                    dismissPictureInPictureIfPresent()
+                    OverlayLockActivity.start(this, OverlayLockActivity.REASON_SHORTS_LIMIT, targetPackage = targetPkg)
+                    isInsideShorts = false
+                    isInsideReels = false
+                    isInsideSpotlight = false
+                    isInsidePureShortForm = false
+                }
             }
         }
         rootNode?.recycle()
@@ -829,9 +1111,14 @@ class DoomsAccessibilityService : AccessibilityService() {
         return lower.contains("instagram") ||
                 lower.contains("snapchat") ||
                 lower.contains("tiktok") ||
-                lower.contains("facebook.katana") ||
+                lower.contains("facebook") ||
                 lower.contains("twitter") ||
-                lower.contains("reddit")
+                lower.contains("x.android") ||
+                lower.contains("reddit") ||
+                lower.contains("sharechat") ||
+                lower.contains("mohalla") ||
+                lower.contains("eterno") ||
+                lower.contains("josh")
     }
 
     private fun exitShortsPlayer() {

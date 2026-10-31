@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/native_bridge.dart';
+import 'create_pin_dialog.dart';
 
 class PinDialog extends StatefulWidget {
   final String title;
@@ -9,35 +10,49 @@ class PinDialog extends StatefulWidget {
   const PinDialog({
     Key? key,
     this.title = 'Enter Parent PIN',
-    this.description = 'Enter your 4-digit PIN to modify parental restrictions.',
+    this.description = 'Please enter your 4-digit PIN to modify rules.',
     this.returnPin = false,
   }) : super(key: key);
 
   static Future<bool> show(
     BuildContext context, {
     String title = 'Enter Parent PIN',
-    String description = 'Enter your 4-digit PIN to modify parental restrictions.',
+    String description = 'Please enter your 4-digit PIN to modify rules.',
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => PinDialog(
+        title: title,
+        description: description,
+        returnPin: false,
+      ),
+    );
+    return result == true;
+  }
+
+  static Future<String?> showForPin(
+    BuildContext context, {
+    String title = 'Enter Parent PIN',
+    String description = 'Please enter your 4-digit PIN to confirm action.',
   }) async {
     final result = await showDialog<dynamic>(
       context: context,
-      barrierDismissible: false,
-      builder: (ctx) => PinDialog(title: title, description: description, returnPin: false),
+      barrierDismissible: true,
+      builder: (ctx) => PinDialog(
+        title: title,
+        description: description,
+        returnPin: true,
+      ),
     );
-    return result == true;
+    return (result is String) ? result : null;
   }
 
   static Future<String?> showAndGetPin(
     BuildContext context, {
     String title = 'Enter Parent PIN',
-    String description = 'Enter your 4-digit PIN to modify parental restrictions.',
-  }) async {
-    final result = await showDialog<dynamic>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => PinDialog(title: title, description: description, returnPin: true),
-    );
-    return (result is String) ? result : null;
-  }
+    String description = 'Please enter your 4-digit PIN to confirm action.',
+  }) => showForPin(context, title: title, description: description);
 
   @override
   State<PinDialog> createState() => _PinDialogState();
@@ -72,21 +87,49 @@ class _PinDialogState extends State<PinDialog> {
     }
   }
 
+  Future<void> _handleForgotPin() async {
+    final verified = await NativeBridge.authenticateDeviceOwner();
+    if (!mounted) return;
+
+    if (verified) {
+      final created = await CreatePinDialog.show(context, isUpdating: true);
+      if (created && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('PIN successfully reset using your phone security!'),
+            backgroundColor: Color(0xFF10B981),
+          ),
+        );
+        Navigator.of(context).pop(widget.returnPin ? null : true);
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Device authentication was not completed.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: const Color(0xFF1E293B),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
       title: Text(
         widget.title,
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold),
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             widget.description,
-            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+            style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
           ),
           const SizedBox(height: 16),
           TextField(
@@ -97,7 +140,7 @@ class _PinDialogState extends State<PinDialog> {
             textAlign: TextAlign.center,
             autofocus: true,
             style: const TextStyle(
-              color: Colors.white,
+              color: Color(0xFF0F172A),
               fontSize: 24,
               letterSpacing: 12,
               fontWeight: FontWeight.bold,
@@ -105,17 +148,24 @@ class _PinDialogState extends State<PinDialog> {
             decoration: InputDecoration(
               counterText: '',
               filled: true,
-              fillColor: const Color(0xFF0F172A),
+              fillColor: const Color(0xFFF8FAFC),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide(
-                  color: _hasError ? const Color(0xFFEF4444) : Colors.transparent,
+                  color: _hasError ? const Color(0xFFEF4444) : const Color(0xFFE2E8F0),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(
+                  color: _hasError ? const Color(0xFFEF4444) : const Color(0xFFE2E8F0),
                 ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide(
-                  color: _hasError ? const Color(0xFFEF4444) : const Color(0xFF3B82F6),
+                  color: _hasError ? const Color(0xFFEF4444) : const Color(0xFF06B6D4),
+                  width: 1.5,
                 ),
               ),
             ),
@@ -129,16 +179,26 @@ class _PinDialogState extends State<PinDialog> {
                 style: TextStyle(color: Color(0xFFEF4444), fontSize: 12),
               ),
             ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: _handleForgotPin,
+            icon: const Icon(Icons.fingerprint_rounded, size: 16, color: Color(0xFF06B6D4)),
+            label: const Text(
+              'Forgot PIN? Verify with phone lock / fingerprint',
+              style: TextStyle(color: Color(0xFF06B6D4), fontSize: 11, fontWeight: FontWeight.w600),
+            ),
+          ),
         ],
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(widget.returnPin ? null : false),
-          child: const Text('Cancel', style: TextStyle(color: Color(0xFF94A3B8))),
+          child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
         ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF3B82F6),
+            backgroundColor: const Color(0xFF06B6D4),
+            elevation: 0,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
           onPressed: _isLoading ? null : _submit,
@@ -148,7 +208,7 @@ class _PinDialogState extends State<PinDialog> {
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                 )
-              : const Text('Confirm', style: TextStyle(color: Colors.white)),
+              : const Text('Confirm', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         ),
       ],
     );

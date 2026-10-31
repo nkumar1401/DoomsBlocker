@@ -61,33 +61,70 @@ object LockOverlayManager {
                 val btnGoHome = view.findViewById<Button>(R.id.btnGoHome)
                 val btnClose = view.findViewById<TextView>(R.id.btnCloseOverlay)
                 val pinSection = view.findViewById<View>(R.id.pinSection)
+                val tvEmergencyPinToggle = view.findViewById<TextView>(R.id.tvEmergencyPinToggle)
+                val pinInputContainer = view.findViewById<View>(R.id.pinInputContainer)
+                val etPin = view.findViewById<android.widget.EditText>(R.id.etPin)
+                val btnUnlockPin = view.findViewById<Button>(R.id.btnUnlockPin)
 
-                // Hide PIN section in WindowManager overlay to keep it a clean, unblockable 5s countdown
-                pinSection?.visibility = View.GONE
+                if (reason == OverlayLockActivity.REASON_STUDY_ZONE) {
+                    pinSection?.visibility = View.GONE
+                } else {
+                    pinSection?.visibility = View.VISIBLE
+                }
 
                 val prefs = AppPreferences(context)
                 when (reason) {
                     OverlayLockActivity.REASON_SHORTS_LIMIT -> {
-                        val isInstagram = targetPackage == "com.instagram.android"
-                        tvTitle?.text = if (isInstagram) "Instagram Locked" else "YouTube Shorts Blocked"
-                        tvMessage?.text = if (isInstagram) {
-                            "Short-form limit reached (${prefs.shortsLimitMinutes} min).\nInstagram is locked for ${prefs.shortsLockDurationMinutes} min to prevent doomscrolling."
-                        } else {
-                            "Shorts limit reached (${prefs.shortsLimitMinutes} min).\nShorts is locked for ${prefs.shortsLockDurationMinutes} min.\n(Long-form YouTube videos remain accessible)."
+                        val limitMins = prefs.shortsLimitMinutes
+                        val lockMins = prefs.shortsLockDurationMinutes
+                        when (targetPackage) {
+                            AppPreferences.PKG_INSTAGRAM -> {
+                                tvTitle?.text = "Instagram Locked"
+                                tvMessage?.text = "Short-form limit reached ($limitMins min).\nInstagram is locked for $lockMins min to prevent doomscrolling."
+                            }
+                            AppPreferences.PKG_SNAPCHAT -> {
+                                tvTitle?.text = "Snapchat Spotlight Blocked"
+                                tvMessage?.text = "Short-form limit reached ($limitMins min).\nSpotlight is locked for $lockMins min.\n(Snapchat chat, camera & stories remain accessible)."
+                            }
+                            AppPreferences.PKG_SHARECHAT -> {
+                                tvTitle?.text = "ShareChat Locked"
+                                tvMessage?.text = "Short-form limit reached ($limitMins min).\nShareChat is locked for $lockMins min to prevent doomscrolling."
+                            }
+                            AppPreferences.PKG_MOJ -> {
+                                tvTitle?.text = "Moj Locked"
+                                tvMessage?.text = "Short-form limit reached ($limitMins min).\nMoj is locked for $lockMins min to prevent doomscrolling."
+                            }
+                            AppPreferences.PKG_JOSH -> {
+                                tvTitle?.text = "Josh Locked"
+                                tvMessage?.text = "Short-form limit reached ($limitMins min).\nJosh is locked for $lockMins min to prevent doomscrolling."
+                            }
+                            else -> {
+                                tvTitle?.text = "YouTube Shorts Blocked"
+                                tvMessage?.text = "Shorts limit reached ($limitMins min).\nShorts is locked for $lockMins min.\n(Long-form YouTube videos remain accessible)."
+                            }
                         }
                     }
                     OverlayLockActivity.REASON_YOUTUBE_LOCKED -> {
-                        tvTitle?.text = "YouTube is Locked"
-                        tvMessage?.text = if (prefs.isNephewModeEnabled) {
-                            "Nephew Mode Active: Complete YouTube access is locked for ${prefs.shortsLockDurationMinutes} minutes."
+                        tvTitle?.text = "YouTube Limit Reached"
+                        tvMessage?.text = if (prefs.isKidsModeEnabled) {
+                            "Kids Mode: Daily YouTube viewing limit reached (${prefs.shortsLimitMinutes} min).\nLocked for a 30-minute cooldown break."
                         } else {
                             "YouTube access remains locked until timer expires. Take a break!"
                         }
                     }
+                    OverlayLockActivity.REASON_KIDS_SHORTS_BLOCKED -> {
+                        tvTitle?.text = "Shorts & Reels Blocked"
+                        tvMessage?.text = "Shorts & Reels are completely blocked in Kids Mode.\nLong-form videos and tutorials are allowed!"
+                    }
+                    OverlayLockActivity.REASON_KIDS_SOCIAL_BLOCKED -> {
+                        val appLabel = if (!blockedItem.isNullOrEmpty()) blockedItem else "Social Media"
+                        tvTitle?.text = "$appLabel Blocked"
+                        tvMessage?.text = "Social media applications are completely locked in Kids Mode to protect children."
+                    }
                     OverlayLockActivity.REASON_GAME_LIMIT -> {
                         val appLabel = if (!blockedItem.isNullOrEmpty()) blockedItem else "Games"
                         tvTitle?.text = "Game Time Limit Reached"
-                        tvMessage?.text = "$appLabel reached the ${prefs.gameLimitMinutes}-minute daily limit under Nephew Mode."
+                        tvMessage?.text = "$appLabel reached the ${prefs.gameLimitMinutes}-minute daily limit under Kids Mode."
                     }
                     OverlayLockActivity.REASON_CHANNEL_BLOCKED -> {
                         val channel = blockedItem ?: "Channel"
@@ -131,6 +168,34 @@ object LockOverlayManager {
 
                 btnGoHome?.setOnClickListener(onGoHome)
                 btnClose?.setOnClickListener(onGoHome)
+
+                tvEmergencyPinToggle?.setOnClickListener {
+                    // Tapping PIN toggle pauses 5-second countdown so user can type!
+                    countDownTimer?.cancel()
+                    tvCountdown?.text = "PAUSED"
+                    pinInputContainer?.visibility = View.VISIBLE
+                    etPin?.requestFocus()
+                }
+
+                btnUnlockPin?.setOnClickListener {
+                    val entered = etPin?.text?.toString()?.trim() ?: ""
+                    if (prefs.isPinSet && entered == prefs.parentPin) {
+                        prefs.unlockYouTubeEmergency()
+                        prefs.resetGamesUsageEmergency()
+                        dismiss(context)
+                        val pkgToLaunch = targetPackage
+                        if (!pkgToLaunch.isNullOrEmpty()) {
+                            val resumeIntent = context.packageManager.getLaunchIntentForPackage(pkgToLaunch)?.apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                            }
+                            if (resumeIntent != null) {
+                                context.startActivity(resumeIntent)
+                            }
+                        }
+                    } else {
+                        android.widget.Toast.makeText(context, "Incorrect PIN", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
 
                 // 5-second smooth countdown
                 countDownTimer = object : CountDownTimer(5000, 1000) {

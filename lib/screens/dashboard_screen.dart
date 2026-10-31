@@ -3,12 +3,18 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/dashboard_data.dart';
 import '../services/native_bridge.dart';
+import '../services/in_app_update_service.dart';
+import '../services/notification_update_service.dart';
+import '../widgets/announcement_modal.dart';
 import '../services/session_security_service.dart';
 import '../widgets/pin_dialog.dart';
+import '../widgets/create_pin_dialog.dart';
 import 'shorts_settings_screen.dart';
 import 'game_limits_screen.dart';
 import 'blocked_channels_screen.dart';
-import 'nephew_mode_screen.dart';
+import 'kids_mode_screen.dart';
+import '../services/subscription_service.dart';
+import '../widgets/kids_mode_paywall_dialog.dart';
 import 'permissions_guide_screen.dart';
 import 'study_zone_screen.dart';
 
@@ -37,6 +43,19 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     _refreshTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       _loadData(silent: true);
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await InAppUpdateService.instance.checkForImmediateUpdate(context);
+      final unread = await NotificationUpdateService.instance.getUnreadAnnouncement();
+      if (unread != null && mounted) {
+        await AnnouncementModal.show(
+          context,
+          title: unread['title'] as String? ?? 'Update Announcement',
+          body: unread['body'] as String? ?? '',
+          versionTag: unread['versionTag'] as String?,
+        );
+        await NotificationUpdateService.instance.markAnnouncementAsRead();
+      }
+    });
   }
 
   @override
@@ -49,6 +68,9 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     SessionSecurityService.instance.handleLifecycleChange(state);
+    if (state == AppLifecycleState.resumed) {
+      InAppUpdateService.instance.checkForImmediateUpdate(context);
+    }
   }
 
   String _manufacturer = '';
@@ -128,7 +150,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
         (shortsLimitSec > 0) ? (_data.shortsUsedSecondsToday / shortsLimitSec).clamp(0.0, 1.0) : 0.0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF080D1A),
+      backgroundColor: const Color(0xFFF8FAFC),
       body: Stack(
         children: [
           // Ambient blurred glow orbs for glassmorphism
@@ -140,7 +162,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
               height: 240,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF8B5CF6).withOpacity(0.18),
+                color: const Color(0xFF8B5CF6).withOpacity(0.07),
               ),
             ),
           ),
@@ -152,7 +174,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
               height: 220,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF06B6D4).withOpacity(0.15),
+                color: const Color(0xFF06B6D4).withOpacity(0.07),
               ),
             ),
           ),
@@ -164,7 +186,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
               height: 200,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF3B82F6).withOpacity(0.12),
+                color: const Color(0xFF3B82F6).withOpacity(0.05),
               ),
             ),
           ),
@@ -209,8 +231,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
 
                               const SizedBox(height: 14),
 
-                              // Nephew Mode Guard Card
-                              _buildNephewModeCard(),
+                              // Kids Mode Guard Card
+                              _buildKidsModeCard(),
 
                               const SizedBox(height: 22),
 
@@ -230,8 +252,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                                     const SizedBox(width: 8),
                                     const Text(
                                       'CONTROL PANEL',
-                                      style: TextStyle(
-                                        color: Color(0xFF94A3B8),
+                                      style: const TextStyle(
+                                        color: Color(0xFF64748B),
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 1.5,
@@ -267,23 +289,26 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF06B6D4), Color(0xFF8B5CF6)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
+                  shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFF06B6D4).withOpacity(0.35),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
                     ),
                   ],
                 ),
-                child: const Icon(Icons.shield_rounded, color: Colors.white, size: 20),
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/images/app_logo.png',
+                    width: 38,
+                    height: 38,
+                    fit: BoxFit.cover,
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
               Column(
@@ -294,14 +319,14 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
                       fontSize: 20,
-                      color: Colors.white,
+                      color: const Color(0xFF0F172A),
                       letterSpacing: 0.3,
                     ),
                   ),
                   Text(
                     'Digital Wellbeing',
                     style: TextStyle(
-                      color: const Color(0xFF94A3B8).withOpacity(0.8),
+                      color: const Color(0xFF64748B),
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
                     ),
@@ -346,18 +371,18 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B).withOpacity(0.6),
+        color: const Color(0xFFFEF3C7),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.info_outline, color: Color(0xFFF59E0B), size: 22),
+          const Icon(Icons.info_outline, color: Color(0xFFB45309), size: 22),
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
               'Permissions missing. Tap setup to grant Accessibility.',
-              style: TextStyle(color: Color(0xFFFDE68A), fontSize: 12),
+              style: TextStyle(color: Color(0xFF92400E), fontSize: 12, fontWeight: FontWeight.w500),
             ),
           ),
           TextButton(
@@ -441,19 +466,19 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
       decoration: BoxDecoration(
-        color: const Color(0xFF121B2F).withOpacity(0.65),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: isLocked ? const Color(0xFFEF4444).withOpacity(0.3) : Colors.white.withOpacity(0.09),
+          color: isLocked ? const Color(0xFFEF4444).withOpacity(0.4) : const Color(0xFFE2E8F0),
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
             color: isLocked
-                ? const Color(0xFFEF4444).withOpacity(0.15)
-                : const Color(0xFF06B6D4).withOpacity(0.08),
-            blurRadius: 28,
-            offset: const Offset(0, 10),
+                ? const Color(0xFFEF4444).withOpacity(0.08)
+                : Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -464,13 +489,13 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
               color: isLocked
-                  ? const Color(0xFFEF4444).withOpacity(0.18)
-                  : const Color(0xFF10B981).withOpacity(0.18),
+                  ? const Color(0xFFFEE2E2)
+                  : const Color(0xFFDCFCE7),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: isLocked
-                    ? const Color(0xFFEF4444).withOpacity(0.5)
-                    : const Color(0xFF10B981).withOpacity(0.5),
+                    ? const Color(0xFFF87171)
+                    : const Color(0xFF4ADE80),
               ),
             ),
             child: Row(
@@ -494,7 +519,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                 Text(
                   isLocked ? 'LOCKDOWN ACTIVE' : 'PROTECTION ACTIVE',
                   style: TextStyle(
-                    color: isLocked ? const Color(0xFFFCA5A5) : const Color(0xFF6EE7B7),
+                    color: isLocked ? const Color(0xFF991B1B) : const Color(0xFF166534),
                     fontWeight: FontWeight.w800,
                     fontSize: 11,
                     letterSpacing: 1.0,
@@ -519,7 +544,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                     progress: progress,
                     startColor: isLocked ? const Color(0xFFEF4444) : const Color(0xFF06B6D4),
                     endColor: isLocked ? const Color(0xFFA855F7) : const Color(0xFF8B5CF6),
-                    trackColor: Colors.white.withOpacity(0.06),
+                    trackColor: const Color(0xFFF1F5F9),
                     strokeWidth: 9.0,
                   ),
                 ),
@@ -530,7 +555,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                       Text(
                         _formatSeconds(remainingSec),
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: Color(0xFFEF4444),
                           fontSize: 34,
                           fontWeight: FontWeight.w800,
                           fontFamily: 'monospace',
@@ -540,8 +565,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                       const SizedBox(height: 4),
                       Text(
                         'Locked for ${_data.shortsLockDurationMinutes} min',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
+                        style: const TextStyle(
+                          color: Color(0xFF64748B),
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
@@ -552,16 +577,16 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                       const Text(
                         'UNLOCKED',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: Color(0xFF0F172A),
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 1.2,
                         ),
                       ),
-                      Text(
+                      const Text(
                         'YouTube is available',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.65),
+                          color: Color(0xFF64748B),
                           fontSize: 11,
                         ),
                       ),
@@ -604,9 +629,16 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF121B2F).withOpacity(0.6),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -627,7 +659,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                   const SizedBox(width: 10),
                   const Text(
                     'Shorts Screen Time',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                    style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w700, fontSize: 14),
                   ),
                 ],
               ),
@@ -648,7 +680,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
           Container(
             height: 10,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.06),
+              color: const Color(0xFFF1F5F9),
               borderRadius: BorderRadius.circular(5),
             ),
             child: LayoutBuilder(
@@ -679,90 +711,164 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
           const SizedBox(height: 10),
           Text(
             'Rule: After ${_data.shortsLimitMinutes} min of Shorts, auto-locks for ${_data.shortsLockDurationMinutes} min.',
-            style: TextStyle(color: const Color(0xFF94A3B8).withOpacity(0.8), fontSize: 11),
+            style: TextStyle(color: const Color(0xFF64748B), fontSize: 11),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildNephewModeCard() {
-    final enabled = _data.isNephewModeEnabled;
+  Widget _buildKidsModeCard() {
+    final enabled = _data.isKidsModeEnabled;
 
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFF121B2F).withOpacity(0.6),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () async {
+          final ok = await SessionSecurityService.instance.authenticate(
+            context,
+            reason: 'Enter PIN to view Kids Mode Rules & Settings.',
+          );
+          if (!ok || !context.mounted) return;
+          Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const KidsModeScreen()))
+              .then((_) => _loadData());
+        },
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: enabled ? const Color(0xFF10B981).withOpacity(0.3) : Colors.white.withOpacity(0.08),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: enabled ? const Color(0xFF10B981).withOpacity(0.4) : const Color(0xFFE2E8F0),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: enabled
+                            ? const Color(0xFF10B981).withOpacity(0.2)
+                            : const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.child_care_rounded,
+                        color: enabled ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Text(
+                                'Parental Controls',
+                                style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w700, fontSize: 14),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF06B6D4).withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFF06B6D4).withOpacity(0.3)),
+                                ),
+                                child: const Text(
+                                  'Kids Mode',
+                                  style: TextStyle(color: Color(0xFF0284C7), fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            enabled
+                                ? 'Active: YouTube & games strictly locked • Tap for rules'
+                                : 'Disabled: Regular personal limits active • Tap for rules',
+                            style: const TextStyle(
+                              color: Color(0xFF64748B),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: enabled,
+                activeColor: const Color(0xFF10B981),
+                activeTrackColor: const Color(0xFF10B981).withOpacity(0.4),
+                onChanged: (val) async {
+                  if (val) {
+                    if (!SubscriptionService().canAccessKidsMode) {
+                      final purchased = await KidsModePaywallDialog.show(context);
+                      if (purchased != true && !SubscriptionService().canAccessKidsMode) {
+                        return;
+                      }
+                    }
+                  }
+
+                  final ok = await SessionSecurityService.instance.authenticate(
+                    context,
+                    reason: val
+                        ? 'Enter PIN to activate Kids Mode.'
+                        : 'Enter PIN to disable Kids Mode.',
+                  );
+                  if (!ok) return;
+
+                  await NativeBridge.setKidsMode(enabled: val);
+                  _loadData();
+                },
+              ),
+            ],
+          ),
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: enabled
-                        ? const Color(0xFF10B981).withOpacity(0.2)
-                        : Colors.white.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    Icons.child_care_rounded,
-                    color: enabled ? const Color(0xFF10B981) : const Color(0xFF64748B),
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Nephew Guard',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        enabled
-                            ? 'Active: YouTube & games strictly locked'
-                            : 'Disabled: Regular personal limits active',
-                        style: TextStyle(
-                          color: const Color(0xFF94A3B8).withOpacity(0.8),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Switch(
-            value: enabled,
-            activeColor: const Color(0xFF10B981),
-            activeTrackColor: const Color(0xFF10B981).withOpacity(0.4),
-            onChanged: (val) async {
-              final ok = await SessionSecurityService.instance.authenticate(
-                context,
-                reason: val
-                    ? 'Enter PIN to activate Nephew Guard mode.'
-                    : 'Enter PIN to disable Nephew Guard mode.',
-              );
-              if (!ok) return;
-
-              await NativeBridge.setNephewMode(enabled: val);
-              _loadData();
-            },
-          ),
-        ],
-      ),
     );
+  }
+
+  Future<void> _handleChangePin() async {
+    final pinSet = await NativeBridge.isPinSet();
+    if (pinSet) {
+      final pinOk = await PinDialog.show(
+        context,
+        title: 'Verify Current PIN',
+        description: 'Enter your current 4-digit PIN before setting a new one.',
+      );
+      if (!pinOk) return;
+    }
+
+    if (!mounted) return;
+
+    final created = await CreatePinDialog.show(context, isUpdating: pinSet);
+    if (created && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Parent PIN updated successfully!'),
+          backgroundColor: Color(0xFF10B981),
+        ),
+      );
+      _loadData();
+    }
   }
 
   Widget _buildControlPanelGrid() {
@@ -836,17 +942,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                 icon: Icons.lock_rounded,
                 iconColor: const Color(0xFF10B981),
                 title: 'Security PIN',
-                subtitle: _data.isPinSet ? 'Parent PIN Set' : 'Set PIN Now',
-                onTap: () async {
-                  final ok = await SessionSecurityService.instance.authenticate(
-                    context,
-                    reason: 'Enter PIN to access Security PIN settings.',
-                  );
-                  if (!ok || !context.mounted) return;
-                  Navigator.of(context)
-                      .push(MaterialPageRoute(builder: (_) => const NephewModeScreen()))
-                      .then((_) => _loadData());
-                },
+                subtitle: _data.isPinSet ? 'Parent PIN Set (Tap to Reset)' : 'Set PIN Now',
+                onTap: _handleChangePin,
               ),
             ),
           ],
@@ -870,9 +967,16 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
           decoration: BoxDecoration(
-            color: const Color(0xFF121B2F).withOpacity(0.6),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.white.withOpacity(0.08)),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -889,7 +993,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
               Text(
                 title,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: const Color(0xFF0F172A),
                   fontWeight: FontWeight.w700,
                   fontSize: 13,
                 ),
@@ -898,7 +1002,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
               Text(
                 subtitle,
                 style: TextStyle(
-                  color: const Color(0xFF94A3B8).withOpacity(0.8),
+                  color: const Color(0xFF64748B),
                   fontSize: 11,
                 ),
               ),
@@ -934,11 +1038,11 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
               children: [
                 const Text(
                   'Library Focus Active',
-                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: Color(0xFF047857), fontSize: 13, fontWeight: FontWeight.bold),
                 ),
                 Text(
                   '${_formatSeconds(_data.studyZoneRemainingSeconds)} left · PIN disabled',
-                  style: const TextStyle(color: Color(0xFF6EE7B7), fontSize: 11),
+                  style: const TextStyle(color: Color(0xFF065F46), fontSize: 11),
                 ),
               ],
             ),
@@ -978,26 +1082,21 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
         child: Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: active
-                  ? [
-                      const Color(0xFF10B981).withOpacity(0.2),
-                      const Color(0xFF06B6D4).withOpacity(0.1),
-                    ]
-                  : [
-                      const Color(0xFF06B6D4).withOpacity(0.15),
-                      const Color(0xFF131B2E).withOpacity(0.8),
-                    ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: active
                   ? const Color(0xFF10B981).withOpacity(0.5)
-                  : const Color(0xFF06B6D4).withOpacity(0.3),
+                  : const Color(0xFFE2E8F0),
               width: active ? 1.5 : 1.0,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
           child: Row(
             children: [
@@ -1023,7 +1122,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                         const Text(
                           'Library Study Zone',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: const Color(0xFF0F172A),
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
                           ),
@@ -1058,7 +1157,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 16),
+              const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF94A3B8), size: 16),
             ],
           ),
         ),

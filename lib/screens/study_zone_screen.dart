@@ -8,6 +8,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/dashboard_data.dart';
 import '../services/native_bridge.dart';
+import '../widgets/duration_picker_dialog.dart';
 import 'qr_scanner_screen.dart';
 
 class StudyZoneScreen extends StatefulWidget {
@@ -106,23 +107,23 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
             Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B), size: 26),
             SizedBox(width: 10),
-            Text('Not Checked In', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            Text('Not Checked In', style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Text(
           'You scanned an Exit / Checkout poster, but you are not checked into $zoneName yet!\n\nPlease scan the Library Entrance poster first to start your study session.',
-          style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+          style: const TextStyle(color: Color(0xFF475569), fontSize: 13, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -145,18 +146,18 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
             Icon(Icons.info_outline, color: Color(0xFF06B6D4), size: 26),
             SizedBox(width: 10),
-            Text('Already Checked In', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            Text('Already Checked In', style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Text(
           'You are already checked in to ${_data.studyZoneName.isNotEmpty ? _data.studyZoneName : zoneName}!\n\nYour focused study session is currently active. To finish and release the distraction lock, scan the Exit QR poster at the desk.',
-          style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+          style: const TextStyle(color: Color(0xFF475569), fontSize: 13, height: 1.4),
         ),
         actions: [
           ElevatedButton(
@@ -177,18 +178,18 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
             Icon(Icons.wrong_location_outlined, color: Color(0xFFEF4444), size: 26),
             SizedBox(width: 10),
-            Text('Different Library Poster', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            Text('Different Library Poster', style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Text(
           'You are currently checked into "$activeZone", but you scanned the Exit poster for "$scannedZone"!\n\nPlease scan the Exit poster at "$activeZone" to release your session.',
-          style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+          style: const TextStyle(color: Color(0xFF475569), fontSize: 13, height: 1.4),
         ),
         actions: [
           ElevatedButton(
@@ -223,23 +224,23 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
             Icon(Icons.door_sliding_outlined, color: Color(0xFF10B981)),
             SizedBox(width: 10),
-            Text('Confirm Early Checkout', style: TextStyle(color: Colors.white, fontSize: 18)),
+            Text('Confirm Early Checkout', style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Text(
           'You are leaving ${zone ?? _data.studyZoneName}. This will release the distraction lock and return your phone to normal mode.',
-          style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+          style: const TextStyle(color: Color(0xFF475569), fontSize: 13, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Keep Studying', style: TextStyle(color: Colors.white60)),
+            child: const Text('Keep Studying', style: TextStyle(color: Color(0xFF64748B))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -298,7 +299,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
           return Container(
             padding: const EdgeInsets.all(24),
             decoration: const BoxDecoration(
-              color: Color(0xFF131B2E),
+              color: Colors.white,
               borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             ),
             child: Column(
@@ -310,7 +311,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                     width: 44,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white24,
+                      color: Color(0xFFCBD5E1),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -324,7 +325,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                         color: const Color(0xFF06B6D4).withOpacity(0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.menu_book_rounded, color: Color(0xFF06B6D4), size: 24),
+                      child: const Icon(Icons.menu_book_rounded, color: Color(0xFF0891B2), size: 24),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -334,14 +335,14 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                           Text(
                             zoneName,
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: Color(0xFF0F172A),
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           const Text(
                             'Select your study goal duration',
-                            style: TextStyle(color: Colors.white54, fontSize: 13),
+                            style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
                           ),
                         ],
                       ),
@@ -352,7 +353,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                 const Text(
                   'DURATION PRESETS',
                   style: TextStyle(
-                    color: Colors.white54,
+                    color: Color(0xFF64748B),
                     fontSize: 11,
                     letterSpacing: 1.2,
                     fontWeight: FontWeight.w700,
@@ -379,7 +380,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Custom Duration', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                    const Text('Custom Duration', style: TextStyle(color: Color(0xFF334155), fontSize: 14)),
                     InkWell(
                       onTap: () {
                         _showCustomDurationDialog(context, duration, (newVal) {
@@ -419,7 +420,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                   max: 720,
                   divisions: 47, // 15-min increments up to 12 hours
                   activeColor: const Color(0xFF06B6D4),
-                  inactiveColor: Colors.white12,
+                  inactiveColor: const Color(0xFFE2E8F0),
                   onChanged: (val) => setSheetState(() => duration = val.toInt()),
                 ),
                 const SizedBox(height: 16),
@@ -427,18 +428,18 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF59E0B).withOpacity(0.12),
+                    color: const Color(0xFFFEF3C7),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.3)),
+                    border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4)),
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.shield_outlined, color: Color(0xFFF59E0B), size: 22),
+                      Icon(Icons.shield_outlined, color: Color(0xFFD97706), size: 22),
                       SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           'Personal PIN will be disabled. Shorts & Reels are blocked until the timer hits 00:00 or you scan the Exit QR poster.',
-                          style: TextStyle(color: Color(0xFFFDE68A), fontSize: 12, height: 1.3),
+                          style: TextStyle(color: Color(0xFF92400E), fontSize: 12, height: 1.3),
                         ),
                       ),
                     ],
@@ -486,101 +487,19 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
     int currentMinutes,
     Function(int) onSelected,
   ) async {
-    final hoursCtrl = TextEditingController(text: '${currentMinutes ~/ 60}');
-    final minsCtrl = TextEditingController(text: '${currentMinutes % 60}');
-
-    await showDialog<void>(
-      context: sheetContext,
-      builder: (dlgCtx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Row(
-          children: [
-            Icon(Icons.timer_outlined, color: Color(0xFF06B6D4)),
-            SizedBox(width: 8),
-            Text('Enter Study Goal Time', style: TextStyle(color: Colors.white, fontSize: 17)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Set any custom duration for your study session (up to 24 hours).',
-              style: TextStyle(color: Colors.white70, fontSize: 13),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: hoursCtrl,
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                    decoration: InputDecoration(
-                      labelText: 'Hours',
-                      labelStyle: const TextStyle(color: Colors.white54),
-                      suffixText: 'hr',
-                      suffixStyle: const TextStyle(color: Colors.white54),
-                      filled: true,
-                      fillColor: Colors.black26,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: minsCtrl,
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                    decoration: InputDecoration(
-                      labelText: 'Minutes',
-                      labelStyle: const TextStyle(color: Colors.white54),
-                      suffixText: 'min',
-                      suffixStyle: const TextStyle(color: Colors.white54),
-                      filled: true,
-                      fillColor: Colors.black26,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dlgCtx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF06B6D4),
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () {
-              final h = int.tryParse(hoursCtrl.text.trim()) ?? 0;
-              final m = int.tryParse(minsCtrl.text.trim()) ?? 0;
-              final total = (h * 60) + m;
-              if (total >= 15 && total <= 1440) {
-                onSelected(total);
-                Navigator.pop(dlgCtx);
-              } else {
-                ScaffoldMessenger.of(sheetContext).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please enter a duration between 15 minutes and 24 hours.'),
-                    backgroundColor: Colors.redAccent,
-                  ),
-                );
-              }
-            },
-            child: const Text('Set Time', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
+    final selected = await DurationPickerDialog.show(
+      sheetContext,
+      title: 'Study Goal Duration',
+      description: 'Scroll hours and minutes for your distraction-free study session.',
+      initialMinutes: currentMinutes,
+      minMinutes: 1,
+      maxMinutes: 1440,
+      quickPresets: [15, 30, 45, 60, 90, 120, 180, 240, 300, 360, 480],
     );
+
+    if (selected != null && selected > 0) {
+      onSelected(selected);
+    }
   }
 
   Widget _buildPresetChip(
@@ -597,16 +516,16 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF06B6D4) : const Color(0xFF1E293B),
+          color: isSelected ? const Color(0xFF06B6D4) : const Color(0xFFF1F5F9),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? const Color(0xFF06B6D4) : Colors.white12,
+            color: isSelected ? const Color(0xFF06B6D4) : const Color(0xFFE2E8F0),
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.black : Colors.white,
+            color: isSelected ? Colors.black : const Color(0xFF334155),
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
             fontSize: 13,
           ),
@@ -618,28 +537,28 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF080D1A),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF080D1A),
+        backgroundColor: const Color(0xFFF8FAFC),
         elevation: 0,
         title: const Text(
           'Library Study Zone',
           style: TextStyle(
-            color: Colors.white,
+            color: Color(0xFF0F172A),
             fontSize: 19,
             fontWeight: FontWeight.bold,
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white70, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF0F172A), size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: const Color(0xFF06B6D4),
           indicatorWeight: 3,
-          labelColor: const Color(0xFF06B6D4),
-          unselectedLabelColor: Colors.white60,
+          labelColor: const Color(0xFF0891B2),
+          unselectedLabelColor: const Color(0xFF64748B),
           tabs: const [
             Tab(icon: Icon(Icons.school_outlined, size: 20), text: 'Study Mode'),
             Tab(icon: Icon(Icons.print_outlined, size: 20), text: 'Poster Generator'),
@@ -704,16 +623,16 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
             height: 240,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFF131B2E),
+              color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF06B6D4).withOpacity(0.2),
-                  blurRadius: 30,
-                  spreadRadius: 5,
+                  color: const Color(0xFF06B6D4).withOpacity(0.18),
+                  blurRadius: 28,
+                  spreadRadius: 4,
                 ),
               ],
               border: Border.all(
-                color: const Color(0xFF06B6D4).withOpacity(0.3),
+                color: const Color(0xFF06B6D4).withOpacity(0.4),
                 width: 4,
               ),
             ),
@@ -725,7 +644,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                 Text(
                   _formatTimer(_localRemainingSeconds),
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: Color(0xFF0F172A),
                     fontSize: 32,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 2,
@@ -736,7 +655,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                 const Text(
                   'REMAINING GOAL',
                   style: TextStyle(
-                    color: Colors.white54,
+                    color: Color(0xFF64748B),
                     fontSize: 10,
                     letterSpacing: 1.5,
                     fontWeight: FontWeight.w600,
@@ -751,9 +670,16 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: const Color(0xFF131B2E),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white10),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: Column(
               children: [
@@ -765,25 +691,25 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                       child: Text(
                         _data.studyZoneName,
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: Color(0xFF0F172A),
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-                    const Text('📚 Studying', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                    const Text('📚 Studying', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
                   ],
                 ),
-                const Divider(color: Colors.white10, height: 24),
+                const Divider(color: Color(0xFFE2E8F0), height: 24),
                 const Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.info_outline, color: Colors.white38, size: 18),
+                    Icon(Icons.info_outline, color: Color(0xFF64748B), size: 18),
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         'Shorts and Reels are completely disabled. Your personal PIN cannot be used to unlock until your timer runs out or you scan the Exit QR poster at the desk.',
-                        style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+                        style: TextStyle(color: Color(0xFF475569), fontSize: 12, height: 1.4),
                       ),
                     ),
                   ],
@@ -830,7 +756,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
             onPressed: () => _handleScanExit(),
             child: const Text(
               'Left the library? Emergency Manual Exit',
-              style: TextStyle(color: Colors.white38, fontSize: 12),
+              style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
             ),
           ),
         ],
@@ -848,16 +774,16 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
           Container(
             padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  const Color(0xFF06B6D4).withOpacity(0.15),
-                  const Color(0xFF1E293B).withOpacity(0.7),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFF06B6D4).withOpacity(0.3)),
+              border: Border.all(color: const Color(0xFF06B6D4).withOpacity(0.35)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF06B6D4).withOpacity(0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -867,12 +793,12 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF06B6D4).withOpacity(0.2),
+                        color: const Color(0xFF06B6D4).withOpacity(0.12),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Icon(
                         Icons.local_library_rounded,
-                        color: Color(0xFF06B6D4),
+                        color: Color(0xFF0891B2),
                         size: 28,
                       ),
                     ),
@@ -884,7 +810,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                           Text(
                             'Library Check-In',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: Color(0xFF0F172A),
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
@@ -892,7 +818,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                           SizedBox(height: 2),
                           Text(
                             'Scan once. Focus 100%. No PIN required.',
-                            style: TextStyle(color: Colors.white60, fontSize: 12),
+                            style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
                           ),
                         ],
                       ),
@@ -902,7 +828,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                 const SizedBox(height: 18),
                 const Text(
                   'Arrived at your study hall? Scan the printed QR poster at the desk or entrance. Set how long you want to study, and DoomsBlocker will completely disable doomscrolling until you are done.',
-                  style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.45),
+                  style: TextStyle(color: Color(0xFF334155), fontSize: 13, height: 1.45),
                 ),
               ],
             ),
@@ -934,7 +860,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
           const Text(
             'HOW IT PROTECTS YOUR STUDY TIME',
             style: TextStyle(
-              color: Colors.white54,
+              color: Color(0xFF64748B),
               fontSize: 11,
               letterSpacing: 1.2,
               fontWeight: FontWeight.w700,
@@ -967,9 +893,16 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF131B2E),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white10),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -981,18 +914,18 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                     children: [
                       Text(
                         'Studying at home or desk?',
-                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.bold),
                       ),
                       Text(
                         'Start a self-guided Study Zone session',
-                        style: TextStyle(color: Colors.white54, fontSize: 11),
+                        style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
                       ),
                     ],
                   ),
                 ),
                 TextButton(
                   onPressed: () => _showGoalPickerSheet('Personal Study Desk'),
-                  child: const Text('Start Now', style: TextStyle(color: Color(0xFF06B6D4))),
+                  child: const Text('Start Now', style: TextStyle(color: Color(0xFF0891B2), fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -1011,9 +944,16 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF131B2E),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1021,7 +961,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
+              color: color.withOpacity(0.12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 20),
@@ -1034,7 +974,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                 Text(
                   title,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: Color(0xFF0F172A),
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                   ),
@@ -1042,7 +982,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                 const SizedBox(height: 4),
                 Text(
                   description,
-                  style: const TextStyle(color: Colors.white60, fontSize: 12, height: 1.35),
+                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 12, height: 1.35),
                 ),
               ],
             ),
@@ -1065,39 +1005,54 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF131B2E),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white10),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.print, color: Color(0xFF06B6D4), size: 22),
+                    Icon(Icons.print, color: Color(0xFF0891B2), size: 22),
                     SizedBox(width: 10),
                     Text(
                       'Printable Library Posters',
-                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: Color(0xFF0F172A), fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 const Text(
                   'Library owners and study halls do not need any app, server, or hardware! Simply print or display these two QR codes on your desk or walls.',
-                  style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+                  style: TextStyle(color: Color(0xFF64748B), fontSize: 12, height: 1.4),
                 ),
                 const SizedBox(height: 16),
                 TextField(
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                  style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14),
                   decoration: InputDecoration(
                     labelText: 'Library / Study Hall Name',
-                    labelStyle: const TextStyle(color: Colors.white54, fontSize: 13),
+                    labelStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
                     filled: true,
-                    fillColor: const Color(0xFF1E293B),
+                    fillColor: const Color(0xFFF1F5F9),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
+                      borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFF06B6D4), width: 1.5),
                     ),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   ),
@@ -1289,21 +1244,21 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
           height: 48,
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1E293B),
-              foregroundColor: Colors.white,
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF0F172A),
               elevation: 2,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
-                side: BorderSide(color: badgeColor.withOpacity(0.4)),
+                side: BorderSide(color: const Color(0xFFCBD5E1)),
               ),
             ),
             icon: Icon(Icons.share_rounded, size: 18, color: badgeColor),
-            label: Text(
+            label: const Text(
               'Share via WhatsApp / Email to Print',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
-                color: Colors.white.withOpacity(0.9),
+                color: Color(0xFF0F172A),
               ),
             ),
             onPressed: onShare,

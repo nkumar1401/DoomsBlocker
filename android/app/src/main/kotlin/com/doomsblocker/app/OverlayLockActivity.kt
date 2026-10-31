@@ -34,6 +34,8 @@ class OverlayLockActivity : Activity() {
         const val REASON_GAME_LIMIT = "reason_game_limit"
         const val REASON_CHANNEL_BLOCKED = "reason_channel_blocked"
         const val REASON_STUDY_ZONE = "reason_study_zone"
+        const val REASON_KIDS_SHORTS_BLOCKED = "reason_kids_shorts_blocked"
+        const val REASON_KIDS_SOCIAL_BLOCKED = "reason_kids_social_blocked"
 
         fun start(
             context: Context,
@@ -151,35 +153,72 @@ class OverlayLockActivity : Activity() {
 
         when (reason) {
             REASON_SHORTS_LIMIT -> {
-                val isInstagram = targetPackage == "com.instagram.android"
-                tvTitle.text = if (isInstagram) "Instagram Locked" else "YouTube Shorts Blocked"
-                tvMessage.text = if (isInstagram) {
-                    "Short-form limit reached (${prefs.shortsLimitMinutes} min).\nInstagram is locked for ${prefs.shortsLockDurationMinutes} min to prevent doomscrolling."
-                } else {
-                    "Shorts limit reached (${prefs.shortsLimitMinutes} min).\nShorts is locked for ${prefs.shortsLockDurationMinutes} min.\n(Long-form YouTube videos remain accessible)."
+                val limitMins = prefs.shortsLimitMinutes
+                val lockMins = prefs.shortsLockDurationMinutes
+                when (targetPackage) {
+                    AppPreferences.PKG_INSTAGRAM -> {
+                        tvTitle.text = "Instagram Locked"
+                        tvMessage.text = "Short-form limit reached ($limitMins min).\nInstagram is locked for $lockMins min to prevent doomscrolling."
+                    }
+                    AppPreferences.PKG_SNAPCHAT -> {
+                        tvTitle.text = "Snapchat Spotlight Blocked"
+                        tvMessage.text = "Short-form limit reached ($limitMins min).\nSpotlight is locked for $lockMins min.\n(Snapchat chat, camera & stories remain accessible)."
+                    }
+                    AppPreferences.PKG_SHARECHAT -> {
+                        tvTitle.text = "ShareChat Locked"
+                        tvMessage.text = "Short-form limit reached ($limitMins min).\nShareChat is locked for $lockMins min to prevent doomscrolling."
+                    }
+                    AppPreferences.PKG_MOJ -> {
+                        tvTitle.text = "Moj Locked"
+                        tvMessage.text = "Short-form limit reached ($limitMins min).\nMoj is locked for $lockMins min to prevent doomscrolling."
+                    }
+                    AppPreferences.PKG_JOSH -> {
+                        tvTitle.text = "Josh Locked"
+                        tvMessage.text = "Short-form limit reached ($limitMins min).\nJosh is locked for $lockMins min to prevent doomscrolling."
+                    }
+                    else -> {
+                        tvTitle.text = "YouTube Shorts Blocked"
+                        tvMessage.text = "Shorts limit reached ($limitMins min).\nShorts is locked for $lockMins min.\n(Long-form YouTube videos remain accessible)."
+                    }
                 }
-                // Smooth 5-second auto-dismiss to Home Screen
+                pinSection.visibility = View.VISIBLE
                 startAutoDismissTimer(5)
             }
             REASON_YOUTUBE_LOCKED -> {
-                tvTitle.text = "YouTube is Locked"
-                if (prefs.isNephewModeEnabled) {
-                    tvMessage.text = "Nephew Mode Active: Complete YouTube access is locked for ${prefs.shortsLockDurationMinutes} minutes."
+                tvTitle.text = "YouTube Limit Reached"
+                if (prefs.isKidsModeEnabled) {
+                    tvMessage.text = "Kids Mode: Daily YouTube viewing limit reached (${prefs.shortsLimitMinutes} min).\nLocked for a 30-minute cooldown break."
                 } else {
                     tvMessage.text = "YouTube access remains locked until timer expires. Take a break!"
                 }
-                tvCountdownLabel.text = "LOCKOUT TIME REMAINING"
+                tvCountdownLabel.text = "COOLDOWN REMAINING"
+                pinSection.visibility = View.VISIBLE
                 startLockdownTimer()
+            }
+            REASON_KIDS_SHORTS_BLOCKED -> {
+                tvTitle.text = "Shorts & Reels Blocked"
+                tvMessage.text = "Short-form videos (Shorts & Reels) are completely blocked in Kids Mode to protect attention span.\n\nLong-form educational videos and tutorials are allowed!"
+                pinSection.visibility = View.VISIBLE
+                startAutoDismissTimer(5)
+            }
+            REASON_KIDS_SOCIAL_BLOCKED -> {
+                val appLabel = if (blockedItem.isNotEmpty()) blockedItem else "Social Media"
+                tvTitle.text = "$appLabel Blocked"
+                tvMessage.text = "Social media applications are completely locked in Kids Mode to protect children."
+                pinSection.visibility = View.VISIBLE
+                startAutoDismissTimer(5)
             }
             REASON_GAME_LIMIT -> {
                 tvTitle.text = "Game Time Limit Reached"
                 val appLabel = if (blockedItem.isNotEmpty()) blockedItem else "Games"
-                tvMessage.text = "$appLabel reached the ${prefs.gameLimitMinutes}-minute daily limit under Nephew Mode."
+                tvMessage.text = "$appLabel reached the ${prefs.gameLimitMinutes}-minute daily limit under Kids Mode."
+                pinSection.visibility = View.VISIBLE
                 startAutoDismissTimer(5)
             }
             REASON_CHANNEL_BLOCKED -> {
                 tvTitle.text = "Restricted YouTube Channel"
                 tvMessage.text = "The channel \"$blockedItem\" is blocked by your parental restriction rules."
+                pinSection.visibility = View.VISIBLE
                 startAutoDismissTimer(5)
             }
             REASON_STUDY_ZONE -> {

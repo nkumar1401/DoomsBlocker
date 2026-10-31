@@ -48,6 +48,47 @@ class NativeBridge {
     }
   }
 
+  static Future<bool> setKidsMode({
+    required bool enabled,
+    String? pin,
+  }) async {
+    try {
+      final res = await _channel.invokeMethod<bool>('setKidsMode', {
+        'enabled': enabled,
+        'pin': pin,
+      });
+      return res ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<List<String>> getEnabledShortFormApps() async {
+    try {
+      final res = await _channel.invokeListMethod<dynamic>('getEnabledShortFormApps');
+      if (res != null) {
+        return res.map((e) => e.toString()).toList();
+      }
+    } catch (e) {
+      // ignore
+    }
+    return const [
+      'com.google.android.youtube',
+      'com.instagram.android',
+    ];
+  }
+
+  static Future<bool> setEnabledShortFormApps(List<String> packages) async {
+    try {
+      final res = await _channel.invokeMethod<bool>('setEnabledShortFormApps', {
+        'packages': packages,
+      });
+      return res ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   static Future<bool> setGameLimitMinutes(int minutes) async {
     try {
       final res = await _channel.invokeMethod<bool>('setGameLimitMinutes', {
@@ -188,6 +229,7 @@ class NativeBridge {
           'accessibility': res['accessibility'] as bool? ?? false,
           'overlay': res['overlay'] as bool? ?? false,
           'usageStats': res['usageStats'] as bool? ?? false,
+          'notification': res['notification'] as bool? ?? false,
         };
       }
     } catch (e) {
@@ -197,7 +239,26 @@ class NativeBridge {
       'accessibility': false,
       'overlay': false,
       'usageStats': false,
+      'notification': false,
     };
+  }
+
+  static Future<bool> requestNotificationPermission() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('requestNotificationPermission');
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> openAppDetailsSettings() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('openAppDetailsSettings');
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<void> openAccessibilitySettings() async {
@@ -231,5 +292,61 @@ class NativeBridge {
     try {
       await _channel.invokeMethod('openBatteryOptimizationSettings');
     } catch (_) {}
+  }
+  static Future<Map<String, dynamic>> checkInAppUpdate() async {
+    try {
+      final res = await _channel.invokeMethod<Map<dynamic, dynamic>>('checkInAppUpdate');
+      if (res != null) {
+        return {
+          'hasUpdate': res['hasUpdate'] as bool? ?? false,
+          'isImmediateAllowed': res['isImmediateAllowed'] as bool? ?? false,
+          'availableVersionCode': res['availableVersionCode'] as int? ?? 0,
+          'priority': res['priority'] as int? ?? 0,
+          'error': res['error'] as String?,
+        };
+      }
+    } catch (e) {
+      // Sideloaded or Play Core not available
+    }
+    return {
+      'hasUpdate': false,
+      'isImmediateAllowed': false,
+      'availableVersionCode': 0,
+      'priority': 0,
+    };
+  }
+
+  static Future<bool> startImmediateUpdate() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('startImmediateUpdate');
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+  static Future<bool> authenticateDeviceOwner() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('authenticateDeviceOwner');
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> showLocalNotification({
+    required String title,
+    required String body,
+    int id = 2002,
+  }) async {
+    try {
+      final res = await _channel.invokeMethod<bool>('showLocalNotification', {
+        'title': title,
+        'body': body,
+        'id': id,
+      });
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
   }
 }

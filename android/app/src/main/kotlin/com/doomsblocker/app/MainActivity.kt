@@ -13,15 +13,31 @@ import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import androidx.core.app.NotificationCompat
+import android.app.Activity
+import com.google.android.play.core.appupdate.AppUpdateInfo
+import com.google.android.play.core.appupdate.AppUpdateManager
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.UpdateAvailability
 
 class MainActivity : FlutterActivity() {
 
     private val CHANNEL = "com.doomsblocker.app/control"
     private lateinit var prefs: AppPreferences
+    private lateinit var appUpdateManager: AppUpdateManager
+    private val REQUEST_CODE_IMMEDIATE_UPDATE = 9001
+    private val REQUEST_CODE_DEVICE_CREDENTIAL = 9002
+    private val REQUEST_CODE_NOTIFICATION = 9003
+    private var pendingAuthResult: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         prefs = AppPreferences(applicationContext)
+        appUpdateManager = AppUpdateManagerFactory.create(this)
 
         // Start background monitor service
         try {
@@ -45,6 +61,8 @@ class MainActivity : FlutterActivity() {
                         "isYouTubeLocked" to prefs.isYouTubeLocked,
                         "youtubeLockRemainingSeconds" to remainingLockSec,
                         "isNephewModeEnabled" to prefs.isNephewModeEnabled,
+                        "isKidsModeEnabled" to prefs.isKidsModeEnabled,
+                        "enabledShortFormApps" to prefs.enabledShortFormApps.toList(),
                         "gameLimitMinutes" to prefs.gameLimitMinutes,
                         "restrictedAppsCount" to prefs.restrictedApps.size,
                         "blockedChannelsCount" to prefs.blockedChannels.size,
@@ -72,6 +90,95 @@ class MainActivity : FlutterActivity() {
                     }
                     prefs.isNephewModeEnabled = enabled
                     result.success(true)
+                }
+
+                "setKidsMode" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: false
+                    val pin = call.argument<String>("pin")
+                    if (pin != null && pin.isNotEmpty()) {
+                        prefs.parentPin = pin
+                    }
+                    prefs.isKidsModeEnabled = enabled
+                    result.success(true)
+                }
+
+                "getEnabledShortFormApps" -> {
+                    result.success(prefs.enabledShortFormApps.toList())
+                }
+
+                "setEnabledShortFormApps" -> {
+                    val packages = call.argument<List<String>>("packages") ?: listOf(
+                        AppPreferences.PKG_YOUTUBE,
+                        AppPreferences.PKG_INSTAGRAM
+                    )
+                    prefs.enabledShortFormApps = packages.toSet()
+                    result.success(true)
+                }
+
+                "checkInAppUpdate" -> {
+                    try {
+                        val appUpdateInfoTask = appUpdateManager.appUpdateInfo
+                        appUpdateInfoTask.addOnSuccessListener { appUpdateInfo ->
+                            val isAvailable = appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
+                            val isImmediateAllowed = appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
+                            val availableVersionCode = appUpdateInfo.availableVersionCode()
+                            val priority = appUpdateInfo.updatePriority()
+
+                            result.success(mapOf(
+                                "hasUpdate" to isAvailable,
+                                "isImmediateAllowed" to isImmediateAllowed,
+                                "availableVersionCode" to availableVersionCode,
+                                "priority" to priority
+                            ))
+                        }.addOnFailureListener { e ->
+                            Log.d("MainActivity", "InAppUpdate check failed (sideload/dev): ${e.message}")
+                            result.success(mapOf(
+                                "hasUpdate" to false,
+                                "isImmediateAllowed" to false,
+                                "availableVersionCode" to 0,
+                                "error" to (e.message ?: "Unavailable")
+                            ))
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "Error querying appUpdateManager: ${e.message}")
+                        result.success(mapOf(
+                            "hasUpdate" to false,
+                            "isImmediateAllowed" to false,
+                            "availableVersionCode" to 0,
+                            "error" to (e.message ?: "Error")
+                        ))
+                    }
+                }
+
+                "startImmediateUpdate" -> {
+                    try {
+                        val appUpdateInfoTask = appUpdateManager.appUpdateInfo
+                        appUpdateInfoTask.addOnSuccessListener { appUpdateInfo ->
+                            if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
+                                appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
+                            ) {
+                                try {
+                                    appUpdateManager.startUpdateFlowForResult(
+                                        appUpdateInfo,
+                                        AppUpdateType.IMMEDIATE,
+                                        this,
+                                        REQUEST_CODE_IMMEDIATE_UPDATE
+                                    )
+                                    result.success(true)
+                                } catch (e: Exception) {
+                                    Log.e("MainActivity", "Failed to start update flow: ${e.message}")
+                                    result.success(false)
+                                }
+                            } else {
+                                result.success(false)
+                            }
+                        }.addOnFailureListener {
+                            result.success(false)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "Exception starting immediate update: ${e.message}")
+                        result.success(false)
+                    }
                 }
 
                 "setGameLimitMinutes" -> {
@@ -150,6 +257,28 @@ class MainActivity : FlutterActivity() {
                     result.success(prefs.isPinSet && pin == prefs.parentPin)
                 }
 
+                "authenticateDeviceOwner" -> {
+                    val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+                    if (keyguardManager.isDeviceSecure) {
+                        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                            keyguardManager.createConfirmDeviceCredentialIntent(
+                                "Parent Verification",
+                                "Confirm your fingerprint or screen lock to verify Parent identity"
+                            )
+                        } else null
+
+                        if (intent != null) {
+                            pendingAuthResult = result
+                            startActivityForResult(intent, REQUEST_CODE_DEVICE_CREDENTIAL)
+                        } else {
+                            result.success(false)
+                        }
+                    } else {
+                        // Device has no screen lock, allow fallback
+                        result.success(true)
+                    }
+                }
+
                 "emergencyUnlockYouTube" -> {
                     val pin = call.argument<String>("pin") ?: ""
                     if (prefs.isPinSet && pin == prefs.parentPin) {
@@ -191,9 +320,40 @@ class MainActivity : FlutterActivity() {
                     val permissions = mapOf(
                         "accessibility" to isAccessibilityServiceEnabled(),
                         "overlay" to isOverlayPermissionGranted(),
-                        "usageStats" to isUsageStatsPermissionGranted()
+                        "usageStats" to isUsageStatsPermissionGranted(),
+                        "notification" to isNotificationPermissionGranted()
                     )
                     result.success(permissions)
+                }
+
+                "requestNotificationPermission" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), REQUEST_CODE_NOTIFICATION)
+                        }
+                    }
+                    result.success(true)
+                }
+
+                "showLocalNotification" -> {
+                    val title = call.argument<String>("title") ?: "DoomsBlocker"
+                    val body = call.argument<String>("body") ?: ""
+                    val notificationId = call.argument<Int>("id") ?: 2002
+                    showLocalReminderNotification(title, body, notificationId)
+                    result.success(true)
+                }
+
+                "openAppDetailsSettings" -> {
+                    try {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.parse("package:$packageName")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.success(false)
+                    }
                 }
 
                 "openAccessibilitySettings" -> {
@@ -343,6 +503,17 @@ class MainActivity : FlutterActivity() {
         )
     }
 
+    private fun isNotificationPermissionGranted(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+            nm?.areNotificationsEnabled() ?: true
+        } else {
+            true
+        }
+    }
+
     private fun isAccessibilityServiceEnabled(): Boolean {
         val expectedService = "$packageName/${DoomsAccessibilityService::class.java.canonicalName}"
         val enabledServices = Settings.Secure.getString(
@@ -376,5 +547,85 @@ class MainActivity : FlutterActivity() {
             )
         }
         return mode == AppOpsManager.MODE_ALLOWED
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE_IMMEDIATE_UPDATE) {
+            if (resultCode != Activity.RESULT_OK) {
+                Log.d("MainActivity", "Immediate update was cancelled or failed by user (resultCode=$resultCode)")
+            }
+        } else if (requestCode == REQUEST_CODE_DEVICE_CREDENTIAL) {
+            val success = (resultCode == Activity.RESULT_OK)
+            pendingAuthResult?.success(success)
+            pendingAuthResult = null
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        try {
+            appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
+                if (appUpdateInfo.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS) {
+                    appUpdateManager.startUpdateFlowForResult(
+                        appUpdateInfo,
+                        AppUpdateType.IMMEDIATE,
+                        this,
+                        REQUEST_CODE_IMMEDIATE_UPDATE
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            // Sideloaded or Play Core not available
+        }
+    }
+
+    private fun showLocalReminderNotification(title: String, body: String, notificationId: Int) {
+        try {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channelId = "doomsblocker_reminders_channel"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    channelId,
+                    "DoomsBlocker Reminders",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Subscription and feature reminders"
+                    enableLights(true)
+                    lightColor = android.graphics.Color.CYAN
+                    enableVibration(true)
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+
+            val launchIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra("route", "kids_mode")
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                this,
+                notificationId,
+                launchIntent,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                } else {
+                    PendingIntent.FLAG_UPDATE_CURRENT
+                }
+            )
+
+            val notification = NotificationCompat.Builder(this, channelId)
+                .setSmallIcon(R.drawable.ic_notification_unlocked)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+                .build()
+
+            notificationManager.notify(notificationId, notification)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error showing local reminder notification: ${e.message}")
+        }
     }
 }

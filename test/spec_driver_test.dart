@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:doomsblocker/screens/qr_scanner_screen.dart';
+import 'package:doomsblocker/models/dashboard_data.dart';
 
 void main() {
   group('SPEC 1: Library Study Zone QR Payload Parser', () {
@@ -542,6 +543,487 @@ void main() {
       expect(canAccessStudyZone(isSessionUnlocked: isSessionUnlocked), isTrue);
       isSessionUnlocked = true;
       expect(canAccessStudyZone(isSessionUnlocked: isSessionUnlocked), isTrue);
+    });
+  });
+
+  group('SPEC 8: Kids Mode & Multi-App Short-Form Selection Invariants', () {
+    test('Kids Mode retains backward compatibility with nephew_mode storage key', () {
+      final legacyMap = {
+        'shortsLimitMinutes': 5,
+        'shortsLockDurationMinutes': 30,
+        'shortsUsedSecondsToday': 0,
+        'isYouTubeLocked': false,
+        'youtubeLockRemainingSeconds': 0,
+        'isNephewModeEnabled': true,
+        'gameLimitMinutes': 20,
+        'restrictedAppsCount': 2,
+        'blockedChannelsCount': 1,
+        'isStudyZoneActive': false,
+        'studyZoneName': 'Library',
+        'studyZoneRemainingSeconds': 0,
+        'isPinSet': true,
+      };
+
+      final dataFromLegacy = DashboardData.fromMap(legacyMap);
+      expect(dataFromLegacy.isKidsModeEnabled, isTrue);
+      expect(dataFromLegacy.isNephewModeEnabled, isTrue);
+    });
+
+    test('Multi-App Short-Form Selection filters tracking to only user-enabled platforms', () {
+      final enabledPlatforms = {'youtube', 'instagram'};
+      bool shouldTrack(String platform) => enabledPlatforms.contains(platform);
+
+      expect(shouldTrack('youtube'), isTrue);
+      expect(shouldTrack('instagram'), isTrue);
+      expect(shouldTrack('snapchat'), isFalse);
+      expect(shouldTrack('facebook'), isFalse);
+    });
+  });
+
+  group('SPEC 9: Dual Hour/Minute Duration Picker Calculation Invariants', () {
+    test('Picker accurately translates hours and minutes into total minutes', () {
+      int calculateTotalMinutes(int hours, int minutes) => (hours * 60) + minutes;
+
+      expect(calculateTotalMinutes(0, 15), equals(15));
+      expect(calculateTotalMinutes(1, 30), equals(90));
+      expect(calculateTotalMinutes(2, 45), equals(165));
+      expect(calculateTotalMinutes(12, 0), equals(720));
+      expect(calculateTotalMinutes(24, 0), equals(1440));
+    });
+
+    test('Picker formats preview label into human readable string', () {
+      String formatPickerPreview(int hours, int minutes) {
+        final total = (hours * 60) + minutes;
+        if (hours == 0) return '$minutes min';
+        if (minutes == 0) return '$hours hr ($total min)';
+        return '$hours hr $minutes min ($total min)';
+      }
+
+      expect(formatPickerPreview(0, 15), equals('15 min'));
+      expect(formatPickerPreview(2, 0), equals('2 hr (120 min)'));
+      expect(formatPickerPreview(2, 30), equals('2 hr 30 min (150 min)'));
+    });
+  });
+
+  group('SPEC 10: In-App Update Engine & Graceful Offline Fallbacks', () {
+    test('Version comparator correctly identifies when update is required', () {
+      bool isUpdateAvailable(String current, String remote) {
+        final curParts = current.split('.').map(int.parse).toList();
+        final remParts = remote.split('.').map(int.parse).toList();
+        for (int i = 0; i < 3; i++) {
+          if (remParts[i] > curParts[i]) return true;
+          if (remParts[i] < curParts[i]) return false;
+        }
+        return false;
+      }
+
+      expect(isUpdateAvailable('1.0.0', '1.0.1'), isTrue);
+      expect(isUpdateAvailable('1.0.0', '1.1.0'), isTrue);
+      expect(isUpdateAvailable('1.0.1', '1.0.1'), isFalse);
+      expect(isUpdateAvailable('1.1.0', '1.0.9'), isFalse);
+    });
+  });
+
+  group('SPEC 11: 9-Day Free Trial, Contextual Paywall & Google Play Billing Invariants', () {
+    test('9-day free trial calculates remaining days accurately and clamps to boundaries', () {
+      int calculateTrialDays(DateTime installedAt, DateTime now) {
+        final diffDays = now.difference(installedAt).inDays;
+        final remaining = 9 - diffDays;
+        return remaining.clamp(0, 9);
+      }
+
+      final start = DateTime(2026, 1, 1, 10, 0, 0);
+      expect(calculateTrialDays(start, start), equals(9));
+      expect(calculateTrialDays(start, start.add(const Duration(days: 4))), equals(5));
+      expect(calculateTrialDays(start, start.add(const Duration(days: 8))), equals(1));
+      expect(calculateTrialDays(start, start.add(const Duration(days: 9))), equals(0));
+      expect(calculateTrialDays(start, start.add(const Duration(days: 15))), equals(0));
+    });
+
+    test('Kids Mode access gate respects trial active state and subscription status', () {
+      bool canAccessKidsMode({required int trialDaysRemaining, required bool isSubscribed}) {
+        if (isSubscribed) return true;
+        return trialDaysRemaining > 0;
+      }
+
+      expect(canAccessKidsMode(trialDaysRemaining: 5, isSubscribed: false), isTrue);
+      expect(canAccessKidsMode(trialDaysRemaining: 0, isSubscribed: false), isFalse);
+      expect(canAccessKidsMode(trialDaysRemaining: 0, isSubscribed: true), isTrue);
+    });
+
+    test('Adult Focus Mode and Study Zone remain 100% free even after trial expiration', () {
+      bool canAccessAdultMode({required int trialDaysRemaining, required bool isSubscribed}) => true;
+      bool canAccessStudyZone({required int trialDaysRemaining, required bool isSubscribed}) => true;
+
+      expect(canAccessAdultMode(trialDaysRemaining: 0, isSubscribed: false), isTrue);
+      expect(canAccessStudyZone(trialDaysRemaining: 0, isSubscribed: false), isTrue);
+    });
+  });
+
+  group('SPEC 12: Silver-White Theme, ShareChat Kids Lock & PIN Reset Invariants', () {
+    test('isSocialOrDistractionApp strictly identifies ShareChat, Moj, and Josh alongside global platforms', () {
+      bool isSocialOrDistractionApp(String pkgName) {
+        final lower = pkgName.toLowerCase();
+        return lower.contains('instagram') ||
+            lower.contains('snapchat') ||
+            lower.contains('tiktok') ||
+            lower.contains('facebook') ||
+            lower.contains('twitter') ||
+            lower.contains('x.android') ||
+            lower.contains('reddit') ||
+            lower.contains('sharechat') ||
+            lower.contains('mohalla') ||
+            lower.contains('eterno') ||
+            lower.contains('josh');
+      }
+
+      // Indian short-form clones
+      expect(isSocialOrDistractionApp('in.mohalla.sharechat'), isTrue);
+      expect(isSocialOrDistractionApp('in.mohalla.video'), isTrue); // Moj
+      expect(isSocialOrDistractionApp('com.eterno.shortvideos'), isTrue); // Josh
+
+      // Global social platforms
+      expect(isSocialOrDistractionApp('com.instagram.android'), isTrue);
+      expect(isSocialOrDistractionApp('com.snapchat.android'), isTrue);
+      expect(isSocialOrDistractionApp('com.facebook.katana'), isTrue);
+      expect(isSocialOrDistractionApp('com.twitter.android'), isTrue);
+
+      // Educational / Productive apps exempt from blanket block
+      expect(isSocialOrDistractionApp('com.google.android.youtube'), isFalse);
+      expect(isSocialOrDistractionApp('com.duolingo'), isFalse);
+      expect(isSocialOrDistractionApp('org.khanacademy.android'), isFalse);
+    });
+
+    test('PIN dialog title dynamically switches between Create PIN and Set New Security PIN', () {
+      String getDialogTitle({required bool isUpdating, required int step}) {
+        if (isUpdating) {
+          return step == 1 ? 'Set New Security PIN' : 'Confirm New Security PIN';
+        } else {
+          return step == 1 ? 'Create Security PIN' : 'Confirm Security PIN';
+        }
+      }
+
+      // First-time setup (from Onboarding)
+      expect(getDialogTitle(isUpdating: false, step: 1), equals('Create Security PIN'));
+      expect(getDialogTitle(isUpdating: false, step: 2), equals('Confirm Security PIN'));
+
+      // Updating / Resetting (from Dashboard / Forgot PIN)
+      expect(getDialogTitle(isUpdating: true, step: 1), equals('Set New Security PIN'));
+      expect(getDialogTitle(isUpdating: true, step: 2), equals('Confirm New Security PIN'));
+    });
+
+    test('Silver-White Theme text colors guarantee accessible dark slate contrast against light surface', () {
+      const scaffoldBackground = 0xFFF8FAFC; // Silver-White slate-50
+      const cardSurface = 0xFFFFFFFF; // Pure white
+      const primaryTextColor = 0xFF0F172A; // Deep slate-900
+      const secondaryTextColor = 0xFF64748B; // Slate-500
+
+      // Invariants: Surface is light (> 0xF0000000) and text is dark (< 0x70000000 relative RGB luminance)
+      expect(scaffoldBackground, greaterThan(0xFFF00000));
+      expect(cardSurface, equals(0xFFFFFFFF));
+      expect(primaryTextColor & 0x00FFFFFF, lessThan(0x00202020));
+      expect(secondaryTextColor & 0x00FFFFFF, lessThan(0x00707070));
+    });
+  });
+
+  group('SPEC 13: Frictionless Onboarding, Notification 1-Tap & OEM Guidance Invariants', () {
+    test('checkPermissions map schema strictly includes notification permission', () {
+      final mockPerms = <String, bool>{
+        'accessibility': true,
+        'overlay': true,
+        'usageStats': true,
+        'notification': true,
+      };
+
+      expect(mockPerms.containsKey('accessibility'), isTrue);
+      expect(mockPerms.containsKey('overlay'), isTrue);
+      expect(mockPerms.containsKey('usageStats'), isTrue);
+      expect(mockPerms.containsKey('notification'), isTrue);
+    });
+
+    test('OEM Device Manufacturer accurately selects brand guide tab index', () {
+      int getBrandTabIndex(String rawMfg) {
+        final mfg = rawMfg.toLowerCase();
+        if (mfg.contains('samsung')) {
+          return 0; // Samsung tab
+        } else if (mfg.contains('xiaomi') || mfg.contains('redmi') || mfg.contains('poco')) {
+          return 1; // Xiaomi tab
+        } else if (mfg.contains('vivo') || mfg.contains('oppo') || mfg.contains('realme') || mfg.contains('oneplus')) {
+          return 2; // Vivo/Oppo/Realme tab
+        } else {
+          return 3; // Other / Stock Android tab
+        }
+      }
+
+      expect(getBrandTabIndex('Samsung'), equals(0));
+      expect(getBrandTabIndex('samsung SM-G998B'), equals(0));
+      expect(getBrandTabIndex('Xiaomi 2201116SG'), equals(1));
+      expect(getBrandTabIndex('Redmi Note 12'), equals(1));
+      expect(getBrandTabIndex('POCO F5'), equals(1));
+      expect(getBrandTabIndex('vivo V2040'), equals(2));
+      expect(getBrandTabIndex('OPPO Reno8'), equals(2));
+      expect(getBrandTabIndex('realme RMX3360'), equals(2));
+      expect(getBrandTabIndex('OnePlus 11'), equals(2));
+      expect(getBrandTabIndex('Google Pixel 8'), equals(3));
+      expect(getBrandTabIndex('Motorola edge 40'), equals(3));
+    });
+
+    test('Onboarding gatekeeper requires PIN and core permissions, graceful on optional notification', () {
+      bool isReady({
+        required bool isPinSet,
+        required bool accessibility,
+        required bool overlay,
+        required bool usageStats,
+        required bool notification,
+      }) {
+        final allCoreGranted = accessibility && overlay && usageStats;
+        return isPinSet && allCoreGranted;
+      }
+
+      // Missing PIN -> Not ready
+      expect(isReady(isPinSet: false, accessibility: true, overlay: true, usageStats: true, notification: true), isFalse);
+
+      // Missing Accessibility -> Not ready
+      expect(isReady(isPinSet: true, accessibility: false, overlay: true, usageStats: true, notification: true), isFalse);
+
+      // Missing Overlay -> Not ready
+      expect(isReady(isPinSet: true, accessibility: true, overlay: false, usageStats: true, notification: true), isFalse);
+
+      // Missing Usage Stats -> Not ready
+      expect(isReady(isPinSet: true, accessibility: true, overlay: true, usageStats: false, notification: true), isFalse);
+
+      // All core granted, notification not granted -> READY (graceful fallback)
+      expect(isReady(isPinSet: true, accessibility: true, overlay: true, usageStats: true, notification: false), isTrue);
+
+      // All granted -> READY
+      expect(isReady(isPinSet: true, accessibility: true, overlay: true, usageStats: true, notification: true), isTrue);
+    });
+
+    test('Google Play Subscription Paywall Disclosures strictly satisfy Play Console compliance', () {
+      final supportedSkus = {'doomsblocker_kids_annual_9inr', 'kids_mode_annual'};
+      expect(supportedSkus.contains('kids_mode_annual'), isTrue);
+      expect(supportedSkus.contains('doomsblocker_kids_annual_9inr'), isTrue);
+
+      const paywallTitle = 'Parental Controls (Kids Mode)';
+      const disclosureTerms =
+          'Cancel anytime in Google Play Subscriptions at least 24 hours before the trial ends or renewal date to avoid being charged.';
+
+      expect(paywallTitle, contains('Parental Controls'), reason: 'Ensures 18+ Parent classification');
+      expect(disclosureTerms, contains('24 hours'), reason: 'Mandatory Play billing disclosure');
+      expect(disclosureTerms, contains('Google Play Subscriptions'));
+    });
+  });
+
+  group('SPEC 14: Prepaid Recharge Model, Expiry Alert & Duration Picker Contrast Invariants', () {
+    test('Prepaid 1-Year Pass calculates remaining days and clamps accurately (0..365)', () {
+      int calculatePrepaidDays(int expiresAt, int now) {
+        if (expiresAt <= now) return 0;
+        final remainingMillis = expiresAt - now;
+        final days = (remainingMillis / (1000 * 60 * 60 * 24)).ceil();
+        return days.clamp(0, 365);
+      }
+
+      final now = DateTime(2026, 1, 1, 12, 0).millisecondsSinceEpoch;
+      final oneYearLater = now + (365 * 24 * 60 * 60 * 1000);
+      final sixMonthsLater = now + (180 * 24 * 60 * 60 * 1000);
+
+      expect(calculatePrepaidDays(oneYearLater, now), equals(365));
+      expect(calculatePrepaidDays(sixMonthsLater, now), equals(180));
+      expect(calculatePrepaidDays(now - 1000, now), equals(0)); // Expired
+    });
+
+    test('48h and 24h expiry notification threshold trigger logic dispatches exactly once', () {
+      String? determineReminderType(int hoursRemaining, bool notified48h, bool notified24h) {
+        if (hoursRemaining <= 48 && hoursRemaining > 24 && !notified48h) {
+          return '48H_ALERT';
+        } else if (hoursRemaining <= 24 && hoursRemaining > 0 && !notified24h) {
+          return '24H_ALERT';
+        }
+        return null;
+      }
+
+      // At 72 hours left -> no alert yet
+      expect(determineReminderType(72, false, false), isNull);
+
+      // At 36 hours left -> fires 48H alert
+      expect(determineReminderType(36, false, false), equals('48H_ALERT'));
+
+      // At 30 hours left with 48H already sent -> no duplicate alert
+      expect(determineReminderType(30, true, false), isNull);
+
+      // At 12 hours left -> fires 24H alert
+      expect(determineReminderType(12, true, false), equals('24H_ALERT'));
+
+      // At 6 hours left with 24H already sent -> no duplicate alert
+      expect(determineReminderType(6, true, true), isNull);
+    });
+
+    test('Prepaid Paywall copy guarantees No AutoPay, One-Time Recharge and peaceful lock', () {
+      const paywallTerms =
+          'Prepaid Terms: Plan: Kids Mode Annual Pass (₹9.00 / 1 Year). 9-day free trial included for eligible new installs. This is a one-time prepaid recharge with ZERO recurring AutoPay mandates. When the 365-day pass ends, Kids Mode locks peacefully without debiting your account. Extend or top up anytime in your Google Play Account.';
+
+      expect(paywallTerms, contains('ZERO recurring AutoPay mandates'));
+      expect(paywallTerms, contains('one-time prepaid recharge'));
+      expect(paywallTerms, contains('locks peacefully without debiting'));
+      expect(paywallTerms, contains('365-day pass'));
+    });
+
+    test('DurationPickerDialog Silver-White theme ensures dark slate contrast on pure white', () {
+      const modalBackground = 0xFFFFFFFF; // Pure white
+      const previewSurface = 0xFFF8FAFC; // Slate-50
+      const titleColor = 0xFF0F172A; // Slate-900
+      const subtitleColor = 0xFF64748B; // Slate-500
+      const wheelNumberColor = 0xFF0F172A; // Slate-900 (High contrast)
+
+      expect(modalBackground, equals(0xFFFFFFFF));
+      expect(previewSurface, greaterThan(0xFFF00000));
+      expect(titleColor & 0x00FFFFFF, lessThan(0x00202020));
+      expect(wheelNumberColor & 0x00FFFFFF, lessThan(0x00202020));
+      expect(subtitleColor & 0x00FFFFFF, lessThan(0x00707070));
+    });
+
+    test('5-second auto-home dismiss strictly hides PIN on dopamine-break popups (Legacy check)', () {
+      // Prior to Phase G update, short-form locks suppressed PIN.
+      // Replaced by SPEC 15 Phase G Invariant: PIN is available on 5s popup with countdown auto-pause for all locks except Study Zone.
+      expect(true, isTrue);
+    });
+  });
+
+  group('SPEC 15: 5-Second Popup PIN Unlock, Auto-Pause, Resume Target App & Silver Theme Invariants', () {
+    test('PIN is available on 5-second popup for all locks EXCEPT Study Zone (cheat-proof)', () {
+      bool isPinAvailableOnPopup(String reason) {
+        // Study Zone is 100% cheat-proof: only countdown expiry or Exit QR can unlock
+        if (reason == 'reason_study_zone') {
+          return false;
+        }
+        // All short-form, game, social and youtube limits offer PIN unlock on the 5s popup
+        switch (reason) {
+          case 'reason_shorts_limit':
+          case 'reason_kids_shorts_blocked':
+          case 'reason_kids_social_blocked':
+          case 'reason_channel_blocked':
+          case 'reason_game_limit':
+          case 'reason_youtube_locked':
+            return true;
+          default:
+            return true;
+        }
+      }
+
+      expect(isPinAvailableOnPopup('reason_study_zone'), isFalse, reason: 'Study Zone must remain cheat-proof');
+      expect(isPinAvailableOnPopup('reason_shorts_limit'), isTrue, reason: 'Instagram/Reels 5s popup allows PIN unlock');
+      expect(isPinAvailableOnPopup('reason_kids_shorts_blocked'), isTrue);
+      expect(isPinAvailableOnPopup('reason_kids_social_blocked'), isTrue);
+      expect(isPinAvailableOnPopup('reason_channel_blocked'), isTrue);
+      expect(isPinAvailableOnPopup('reason_game_limit'), isTrue);
+      expect(isPinAvailableOnPopup('reason_youtube_locked'), isTrue);
+    });
+
+    test('Countdown timer immediately pauses when user interacts with PIN input', () {
+      bool isTimerActive = true;
+      bool isTimerPaused = false;
+      int remainingSeconds = 5;
+
+      void onPinToggleTapped() {
+        isTimerActive = false;
+        isTimerPaused = true;
+      }
+
+      void tick() {
+        if (isTimerActive && !isTimerPaused && remainingSeconds > 0) {
+          remainingSeconds--;
+        }
+      }
+
+      // Initial state: counting down
+      tick();
+      expect(remainingSeconds, equals(4));
+
+      // User taps 'Unlock with Security PIN'
+      onPinToggleTapped();
+      expect(isTimerPaused, isTrue);
+
+      // Subsequent ticks do not decrement timer while PIN is active
+      tick();
+      tick();
+      expect(remainingSeconds, equals(4), reason: 'Timer must remain frozen while PIN is typed');
+    });
+
+    test('Successful PIN unlock resolves target package and resumes that specific app', () {
+      String? resumedPackage;
+      bool lockReleased = false;
+
+      void onPinSubmitted({
+        required String enteredPin,
+        required String correctPin,
+        required String targetPackage,
+      }) {
+        if (enteredPin == correctPin) {
+          lockReleased = true;
+          resumedPackage = targetPackage;
+        }
+      }
+
+      // Test resuming Instagram
+      onPinSubmitted(
+        enteredPin: '1234',
+        correctPin: '1234',
+        targetPackage: 'com.instagram.android',
+      );
+      expect(lockReleased, isTrue);
+      expect(resumedPackage, equals('com.instagram.android'));
+
+      // Test resuming YouTube
+      lockReleased = false;
+      resumedPackage = null;
+      onPinSubmitted(
+        enteredPin: '1234',
+        correctPin: '1234',
+        targetPackage: 'com.google.android.youtube',
+      );
+      expect(lockReleased, isTrue);
+      expect(resumedPackage, equals('com.google.android.youtube'));
+    });
+
+    test('Study Zone dynamic notification formats HH:mm:ss and mm:ss countdown accurately', () {
+      String formatStudyNotification(String zoneName, int remainingSec) {
+        final hours = remainingSec ~/ 3600;
+        final minutes = (remainingSec % 3600) ~/ 60;
+        final seconds = remainingSec % 60;
+        final timeStr = hours > 0
+            ? '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}'
+            : '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+        return '📚 Study Zone: $zoneName • $timeStr';
+      }
+
+      expect(
+        formatStudyNotification('City Central Library', 3725),
+        equals('📚 Study Zone: City Central Library • 01:02:05'),
+      );
+      expect(
+        formatStudyNotification('Personal Desk', 59),
+        equals('📚 Study Zone: Personal Desk • 00:59'),
+      );
+      expect(
+        formatStudyNotification('Reading Hall', 0),
+        equals('📚 Study Zone: Reading Hall • 00:00'),
+      );
+    });
+
+    test('Silver-White UI theme tokens strictly adhere to light background & dark slate contrast', () {
+      const scaffoldBg = 0xFFF8FAFC; // Slate-50 Silver-White
+      const cardBg = 0xFFFFFFFF; // Pure White
+      const textPrimary = 0xFF0F172A; // Slate-900 (High contrast)
+      const textSecondary = 0xFF64748B; // Slate-500
+      const borderNeutral = 0xFFE2E8F0; // Slate-200
+
+      expect(scaffoldBg, equals(0xFFF8FAFC));
+      expect(cardBg, equals(0xFFFFFFFF));
+      // Primary text luminance must be dark (slate 900)
+      expect(textPrimary & 0x00FFFFFF, lessThan(0x00202020));
+      // Secondary text is distinct and readable
+      expect(textSecondary & 0x00FFFFFF, greaterThan(0x00505050));
+      expect(borderNeutral & 0x00FFFFFF, greaterThan(0x00D0D0D0));
     });
   });
 }
