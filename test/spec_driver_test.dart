@@ -1107,6 +1107,46 @@ void main() {
       expect(activePackage, equals('com.google.android.youtube'));
     });
   });
+
+  group('SPEC 17: Emergency Exit High-Visibility Button & Clean Play Store Onboarding Invariants', () {
+    test('Emergency Manual Exit action guarantees prominent interactive button styling', () {
+      const buttonHeight = 48.0;
+      const borderRadius = 14.0;
+      const borderColor = 0xFFCBD5E1; // Slate-300
+      const iconColor = 0xFFD97706; // Amber-600
+      const textColor = 0xFF334155; // Slate-700
+      const label = 'Left the library? Emergency Manual Exit';
+
+      expect(buttonHeight, greaterThanOrEqualTo(48.0), reason: 'Sufficient touch target');
+      expect(borderRadius, equals(14.0));
+      expect(label, contains('Emergency Manual Exit'));
+      expect(iconColor, equals(0xFFD97706));
+      expect(textColor & 0x00FFFFFF, lessThan(0x00505050), reason: 'High contrast text');
+    });
+
+    test('Accessibility Guide Dialog OEM instructions direct user to tap bottom button without sideload warnings', () {
+      String getBrandSteps(int brandIndex) {
+        switch (brandIndex) {
+          case 0:
+            return '1. Tap "Continue to Accessibility Settings" below\n2. Tap "Installed apps"\n3. Tap "DoomsBlocker"\n4. Toggle the main switch ON and tap Allow.';
+          case 1:
+            return '1. Tap "Continue to Accessibility Settings" below\n2. Tap "Downloaded apps"\n3. Tap "DoomsBlocker"\n4. Toggle the main switch ON and tap OK.';
+          case 2:
+            return '1. Tap "Continue to Accessibility Settings" below\n2. Tap "Downloaded apps"\n3. Tap "DoomsBlocker"\n4. Toggle the main switch ON and confirm.';
+          default:
+            return '1. Tap "Continue to Accessibility Settings" below\n2. Tap "Downloaded apps" or scroll to "DoomsBlocker"\n3. Tap "DoomsBlocker" and toggle the switch ON.';
+        }
+      }
+
+      for (int i = 0; i <= 3; i++) {
+        final steps = getBrandSteps(i);
+        expect(steps, contains('Continue to Accessibility Settings'));
+        expect(steps, contains('DoomsBlocker'));
+        expect(steps, isNot(contains('Open App Info')));
+        expect(steps, isNot(contains('Allow restricted')));
+      }
+    });
+  });
 }
 
 

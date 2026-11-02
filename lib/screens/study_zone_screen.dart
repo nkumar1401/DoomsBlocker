@@ -751,12 +751,28 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
               },
             ),
           ),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: () => _handleScanExit(),
-            child: const Text(
-              'Left the library? Emergency Manual Exit',
-              style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: () => _handleScanExit(),
+              style: OutlinedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFF0F172A),
+                side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.2),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              icon: const Icon(Icons.meeting_room_outlined, size: 20, color: Color(0xFFD97706)),
+              label: const Text(
+                'Left the library? Emergency Manual Exit',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF334155),
+                ),
+              ),
             ),
           ),
         ],

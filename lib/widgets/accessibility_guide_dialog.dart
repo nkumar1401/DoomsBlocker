@@ -188,61 +188,6 @@ class _AccessibilityGuideDialogState extends State<AccessibilityGuideDialog> {
                 ],
               ),
             ),
-            const SizedBox(height: 14),
-
-            // Sideloaded / Restricted Settings Warning Card
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFEF3C7),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.5)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: const [
-                      Icon(Icons.lock_open_rounded, color: Color(0xFFB45309), size: 18),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Is DoomsBlocker greyed out? (Restricted Setting)',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF92400E),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Because this APK was installed manually (sideloaded), Android temporarily restricts accessibility.\n(Play Store downloads never have this restriction).',
-                    style: TextStyle(fontSize: 11, color: Color(0xFF92400E), height: 1.4),
-                  ),
-                  const SizedBox(height: 10),
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      await NativeBridge.openAppDetailsSettings();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFD97706),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    icon: const Icon(Icons.settings_outlined, size: 16),
-                    label: const Text(
-                      'Open App Info (Tap 3 dots → Allow restricted)',
-                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-            ),
             const SizedBox(height: 18),
 
             // Primary CTA: Open Settings
@@ -343,13 +288,13 @@ class _AccessibilityGuideDialogState extends State<AccessibilityGuideDialog> {
   String _getBrandSteps() {
     switch (_selectedBrandIndex) {
       case 0:
-        return '1. Open Settings → Accessibility\n2. Tap "Installed apps"\n3. Tap "DoomsBlocker"\n4. Toggle the main switch ON and tap Allow.';
+        return '1. Tap "Continue to Accessibility Settings" below\n2. Tap "Installed apps"\n3. Tap "DoomsBlocker"\n4. Toggle the main switch ON and tap Allow.';
       case 1:
-        return '1. Open Settings → Additional settings → Accessibility\n2. Tap "Downloaded apps"\n3. Tap "DoomsBlocker"\n4. Toggle the main switch ON, check the risk prompt, and tap OK.';
+        return '1. Tap "Continue to Accessibility Settings" below\n2. Tap "Downloaded apps"\n3. Tap "DoomsBlocker"\n4. Toggle the main switch ON and tap OK.';
       case 2:
-        return '1. Open Settings → Accessibility (or System settings)\n2. Tap "Downloaded apps"\n3. Tap "DoomsBlocker"\n4. Toggle the main switch ON and confirm.';
+        return '1. Tap "Continue to Accessibility Settings" below\n2. Tap "Downloaded apps"\n3. Tap "DoomsBlocker"\n4. Toggle the main switch ON and confirm.';
       default:
-        return '1. Open Settings → Accessibility\n2. Scroll down to find "DoomsBlocker"\n3. Tap "DoomsBlocker" and toggle the switch ON.';
+        return '1. Tap "Continue to Accessibility Settings" below\n2. Tap "Downloaded apps" or scroll to "DoomsBlocker"\n3. Tap "DoomsBlocker" and toggle the switch ON.';
     }
   }
 }

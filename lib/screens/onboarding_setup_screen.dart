@@ -202,7 +202,7 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> with Widg
                         ? const Color(0xFF10B981)
                         : const Color(0xFF06B6D4),
                     title: 'Accessibility Service',
-                    subtitle: 'Detects YouTube Shorts and blocks doomscrolling.\n(Tap to see OEM guide & avoid restricted setting)', 
+                    subtitle: 'Detects YouTube Shorts and blocks doomscrolling.\n(Tap for quick 1-tap setup guide)', 
                     actionButton: _buildPermissionButton(
                       isGranted: _permissions['accessibility'] ?? false,
                       onTap: () => AccessibilityGuideDialog.show(context, manufacturer: _manufacturer),

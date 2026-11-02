@@ -310,3 +310,22 @@ ightarrow$ "Allow restricted settings" without manual searching.
 ### 13.2 Google Pay / NPCI Sideloading Anti-Fraud Mitigation
 * **Root Cause of Sideloading Warning**: In India, NPCI and Google Pay enforce automated security checks that flag any app holding Accessibility Service if it was installed from an "Unknown Source" (outside the Google Play Store). This protects users against remote-access scam APKs.
 * **Play Store Whitelist Resolution**: When DoomsBlocker is installed directly via the Google Play Store (e.g. Closed Testing / Production tracks), `packageManager.getInstallerPackageName() == "com.android.vending"`. Google Play Protect verifies the app's cryptographic signature, and Google Pay does not block transactions.
+---
+
+## 14. High-Visibility Emergency Unlock & Clean Play Store Onboarding
+
+### 14.1 High-Visibility Emergency Manual Exit Button in Library Study Zone
+* **Dedicated Action Component**: In `lib/screens/study_zone_screen.dart`, the emergency checkout action is styled as an interactive, prominent secondary button (`OutlinedButton.icon`) rather than a faint text button.
+* **Visual Specifications**:
+  * Width: Full width (`double.infinity`), height: 48.0.
+  * Colors: Pure white card background, Slate-300 border (`#CBD5E1`), Slate-700 text (`#334155`).
+  * Icon: Amber-600 door icon (`Icons.meeting_room_outlined`).
+  * Label: `"Left the library? Emergency Manual Exit"`.
+
+### 14.2 Clean Play Store Accessibility Onboarding
+* **Sideload Warning Deprecation**: Because verified builds are distributed via Google Play Store (Closed Testing / Production), the yellow "Restricted setting / Sideloaded APK" warning card is completely removed from `AccessibilityGuideDialog`.
+* **Direct Navigation Flow**:
+  1. Header with clear purpose disclosure.
+  2. Four-step visual sequence pills (`Settings → Downloaded Apps → DoomsBlocker → Turn ON`).
+  3. Brand selector tabs (Samsung, Xiaomi/Redmi, Vivo/Oppo, Other) instructing users to tap the bottom button to open Settings directly.
+  4. Primary CTA button: `[ Continue to Accessibility Settings ]`.
