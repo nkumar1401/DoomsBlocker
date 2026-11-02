@@ -56,6 +56,11 @@ Any code change that violates these invariants is considered a build-breaking de
 ### Invariant 5: Viewfinder Hardware Acceleration
 * QR Scanner viewfinders must use `CustomPainter` with `PathOperation.difference` for transparent cutouts. Never use `ColorFiltered` with `BlendMode.srcOut` which glitches to a solid red box on modern Android GPU renderers.
 
+### Invariant 6: Banking, UPI & Payment App Immunity
+* The accessibility service must strictly ignore all banking, UPI, wallet, and authentication applications (e.g., Google Pay `com.google.android.apps.nbu.paisa.user`, PhonePe `com.phonepe.app`, Paytm `net.one97.paytm`, BHIM `in.org.npci.upiapp`, YONO SBI, HDFC, ICICI, etc.).
+* Payment app events must immediately return without updating `activePackage`, querying node hierarchies, or evaluating lockouts.
+* Sideloading warning mitigation: Users must install via Google Play Store (Closed Testing / Production) to ensure `packageManager.getInstallerPackageName() == "com.android.vending"` so Google Play Protect and Google Pay recognize the installation as verified and secure.
+
 ---
 
 ## 3. Key File Map & Responsibilities

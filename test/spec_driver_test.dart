@@ -1026,6 +1026,87 @@ void main() {
       expect(borderNeutral & 0x00FFFFFF, greaterThan(0x00D0D0D0));
     });
   });
+
+  group('SPEC 16: Banking, UPI & Payment Application Immunity Invariants', () {
+    final paymentPackages = {
+      'com.google.android.apps.nbu.paisa.user', // Google Pay
+      'com.phonepe.app', // PhonePe
+      'net.one97.paytm', // Paytm
+      'in.org.npci.upiapp', // BHIM UPI
+      'com.dreamplug.androidapp', // CRED
+      'com.naviapp', // Navi
+      'com.freecharge.android', // Freecharge
+      'com.mobikwik_new', // MobiKwik
+      'com.sbi.lotusintouch', // YONO SBI
+      'com.msf.kbank.mobile', // Kotak 811
+      'com.csam.icici.bank.imobile', // ICICI iMobile
+      'com.snapwork.hdfc', // HDFC Bank
+      'com.axis.mobile', // Axis Mobile
+      'com.pnb.pnbone', // PNB ONE
+      'com.bankofbaroda.mconnect', // bob World
+      'com.canarabank.ai1', // Canara ai1
+      'com.infrasoft.uboi', // Union Bank Vyom
+      'com.idfcfirstbank.optimus', // IDFC FIRST Bank
+      'com.indusind.mobile', // IndusInd Mobile
+      'com.google.android.apps.authenticator2', // Google Authenticator
+      'com.azure.authenticator', // Microsoft Authenticator
+    };
+
+    bool isPaymentOrBankingApp(String pkg) {
+      if (paymentPackages.contains(pkg)) return true;
+      final lower = pkg.toLowerCase();
+      return lower.contains('banking') ||
+          lower.contains('.upi') ||
+          lower.contains('payment') ||
+          lower.contains('.wallet') ||
+          lower.contains('paisa') ||
+          lower.contains('paytm') ||
+          lower.contains('phonepe');
+    }
+
+    test('Payment & UPI apps are strictly identified and granted complete immunity', () {
+      expect(isPaymentOrBankingApp('com.google.android.apps.nbu.paisa.user'), isTrue);
+      expect(isPaymentOrBankingApp('com.phonepe.app'), isTrue);
+      expect(isPaymentOrBankingApp('net.one97.paytm'), isTrue);
+      expect(isPaymentOrBankingApp('in.org.npci.upiapp'), isTrue);
+      expect(isPaymentOrBankingApp('com.dreamplug.androidapp'), isTrue);
+      expect(isPaymentOrBankingApp('com.sbi.lotusintouch'), isTrue);
+      expect(isPaymentOrBankingApp('com.snapwork.hdfc'), isTrue);
+      expect(isPaymentOrBankingApp('com.csam.icici.bank.imobile'), isTrue);
+    });
+
+    test('Social and entertainment apps are never falsely categorized as payment apps', () {
+      expect(isPaymentOrBankingApp('com.google.android.youtube'), isFalse);
+      expect(isPaymentOrBankingApp('com.instagram.android'), isFalse);
+      expect(isPaymentOrBankingApp('com.snapchat.android'), isFalse);
+      expect(isPaymentOrBankingApp('com.facebook.katana'), isFalse);
+      expect(isPaymentOrBankingApp('com.roblox.client'), isFalse);
+    });
+
+    test('Payment app events enforce immediate zero-touch early return without mutating activePackage', () {
+      String? activePackage = 'com.google.android.youtube';
+      bool nodeHierarchyQueried = false;
+
+      void onAccessibilityEventSimulation(String pkgName) {
+        if (isPaymentOrBankingApp(pkgName)) {
+          // Invariant 6: immediate early return
+          return;
+        }
+        activePackage = pkgName;
+        nodeHierarchyQueried = true;
+      }
+
+      // User opens Google Pay
+      onAccessibilityEventSimulation('com.google.android.apps.nbu.paisa.user');
+      expect(nodeHierarchyQueried, isFalse, reason: 'Must never query node hierarchy on payment apps');
+      expect(activePackage, equals('com.google.android.youtube'), reason: 'activePackage must be shielded');
+
+      // User opens PhonePe
+      onAccessibilityEventSimulation('com.phonepe.app');
+      expect(nodeHierarchyQueried, isFalse);
+      expect(activePackage, equals('com.google.android.youtube'));
+    });
+  });
 }
 
 

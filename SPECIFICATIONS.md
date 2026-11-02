@@ -298,3 +298,15 @@ ightarrow$ "Allow restricted settings" without manual searching.
 * **Scaffold & Surfaces**: Converted from dark navy (`#080D1A`/`#131B2E`) to Silver-White (`#F8FAFC`) with pure white (`#FFFFFF`) cards and Slate-200 (`#E2E8F0`) borders.
 * **Text Contrast**: All titles, subtitles, and input fields use dark slate (`#0F172A`/`#334155`/`#64748B`) to guarantee WCAG AA contrast.
 * **Unified Screens**: `study_zone_screen.dart`, `game_limits_screen.dart`, `blocked_channels_screen.dart`, and `activity_overlay_lock.xml` are 100% harmonized.
+---
+
+## 13. Banking, UPI & Payment Application Immunity & Sideloading Mitigation
+
+### 13.1 Strict Zero-Touch Banking & Payment Immunity
+* **Immediate Early-Return**: `DoomsAccessibilityService.onAccessibilityEvent` enforces immediate return whenever `pkgName` matches any known UPI, banking, digital wallet, or 2FA authenticator app (Google Pay, PhonePe, Paytm, BHIM, CRED, Navi, SBI YONO, HDFC, ICICI, etc.).
+* **Zero View Hierarchy Traversal**: No `rootInActiveWindow` node queries, no text scanning, and no child node traversal is ever executed on payment or banking applications.
+* **State Preservation**: Opening a payment application does not overwrite `activePackage` and does not reset or pause non-target background counters.
+
+### 13.2 Google Pay / NPCI Sideloading Anti-Fraud Mitigation
+* **Root Cause of Sideloading Warning**: In India, NPCI and Google Pay enforce automated security checks that flag any app holding Accessibility Service if it was installed from an "Unknown Source" (outside the Google Play Store). This protects users against remote-access scam APKs.
+* **Play Store Whitelist Resolution**: When DoomsBlocker is installed directly via the Google Play Store (e.g. Closed Testing / Production tracks), `packageManager.getInstallerPackageName() == "com.android.vending"`. Google Play Protect verifies the app's cryptographic signature, and Google Pay does not block transactions.

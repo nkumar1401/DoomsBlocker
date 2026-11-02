@@ -28,6 +28,42 @@ class DoomsAccessibilityService : AccessibilityService() {
         private const val SHARECHAT_PACKAGE = "in.mohalla.sharechat"
         private const val MOJ_PACKAGE = "in.mohalla.video"
         private const val JOSH_PACKAGE = "com.eterno.shortvideos"
+
+        private val PAYMENT_AND_BANKING_PACKAGES = setOf(
+            "com.google.android.apps.nbu.paisa.user", // Google Pay (Tez)
+            "com.phonepe.app",                        // PhonePe
+            "net.one97.paytm",                        // Paytm
+            "in.org.npci.upiapp",                     // BHIM UPI
+            "com.dreamplug.androidapp",               // CRED
+            "com.naviapp",                            // Navi
+            "com.freecharge.android",                 // Freecharge
+            "com.mobikwik_new",                       // MobiKwik
+            "com.sbi.lotusintouch",                   // YONO SBI
+            "com.msf.kbank.mobile",                   // Kotak 811
+            "com.csam.icici.bank.imobile",            // ICICI iMobile
+            "com.snapwork.hdfc",                      // HDFC Bank MobileBanking
+            "com.axis.mobile",                        // Axis Mobile
+            "com.pnb.pnbone",                         // PNB ONE
+            "com.bankofbaroda.mconnect",              // bob World
+            "com.canarabank.ai1",                     // Canara ai1
+            "com.infrasoft.uboi",                     // Union Bank Vyom
+            "com.idfcfirstbank.optimus",              // IDFC FIRST Bank
+            "com.indusind.mobile",                    // IndusInd Mobile
+            "com.google.android.apps.authenticator2", // Google Authenticator
+            "com.azure.authenticator"                 // Microsoft Authenticator
+        )
+    }
+
+    private fun isPaymentOrBankingApp(pkgName: String): Boolean {
+        if (PAYMENT_AND_BANKING_PACKAGES.contains(pkgName)) return true
+        val lower = pkgName.lowercase(Locale.US)
+        return lower.contains("banking") ||
+                lower.contains(".upi") ||
+                lower.contains("payment") ||
+                lower.contains(".wallet") ||
+                lower.contains("paisa") ||
+                lower.contains("paytm") ||
+                lower.contains("phonepe")
     }
 
     private lateinit var prefs: AppPreferences
@@ -285,6 +321,11 @@ class DoomsAccessibilityService : AccessibilityService() {
         if (pkgName == "com.android.systemui" ||
             pkgName == "com.google.android.inputmethod.latin" ||
             pkgName.startsWith("com.android.systemui")) {
+            return
+        }
+
+        // Invariant 6: Strict zero-touch immunity for Banking, Payment & UPI apps
+        if (isPaymentOrBankingApp(pkgName)) {
             return
         }
 
