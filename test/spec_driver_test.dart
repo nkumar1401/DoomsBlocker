@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:doomsblocker/screens/qr_scanner_screen.dart';
 import 'package:doomsblocker/models/dashboard_data.dart';
@@ -1147,6 +1148,40 @@ void main() {
       }
     });
   });
+
+  group('SPEC 18: DEX Bytecode Optimization (R8) & Android 15 Edge-to-Edge Invariants', () {
+    test('Verify build.gradle configures minifyEnabled, shrinkResources and activity-ktx', () {
+      final gradleFile = File('android/app/build.gradle');
+      expect(gradleFile.existsSync(), isTrue);
+      final gradleContent = gradleFile.readAsStringSync();
+      expect(gradleContent, contains('minifyEnabled = true'));
+      expect(gradleContent, contains('shrinkResources = true'));
+      expect(gradleContent, contains('proguard-android-optimize.txt'));
+      expect(gradleContent, contains('proguard-rules.pro'));
+      expect(gradleContent, contains('androidx.activity:activity-ktx'));
+    });
+
+    test('Verify proguard-rules.pro preserves Flutter, Billing, and DoomsBlocker classes', () {
+      final rulesFile = File('android/app/proguard-rules.pro');
+      expect(rulesFile.existsSync(), isTrue);
+      final rulesContent = rulesFile.readAsStringSync();
+      expect(rulesContent, contains('io.flutter.**'));
+      expect(rulesContent, contains('com.doomsblocker.app.**'));
+      expect(rulesContent, contains('com.android.billingclient.**'));
+      expect(rulesContent, contains('com.google.android.play.core.**'));
+      expect(rulesContent, contains('dev.steenbakker.mobile_scanner.**'));
+    });
+
+    test('Verify MainActivity and OverlayLockActivity enforce Android 15 Edge-to-Edge compliance', () {
+      final mainActivityFile = File('android/app/src/main/kotlin/com/doomsblocker/app/MainActivity.kt');
+      expect(mainActivityFile.existsSync(), isTrue);
+      final mainContent = mainActivityFile.readAsStringSync();
+      expect(mainContent, contains('enableEdgeToEdge()'));
+
+      final overlayActivityFile = File('android/app/src/main/kotlin/com/doomsblocker/app/OverlayLockActivity.kt');
+      expect(overlayActivityFile.existsSync(), isTrue);
+      final overlayContent = overlayActivityFile.readAsStringSync();
+      expect(overlayContent, contains('WindowCompat.setDecorFitsSystemWindows(window, false)'));
+    });
+  });
 }
-
-

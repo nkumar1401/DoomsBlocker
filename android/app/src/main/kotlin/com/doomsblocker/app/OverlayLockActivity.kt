@@ -21,6 +21,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.view.WindowCompat
 import java.util.Locale
 
 class OverlayLockActivity : Activity() {
@@ -92,6 +93,7 @@ class OverlayLockActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         activityCreationTimeMillis = System.currentTimeMillis()
         // If native WindowManager overlay was showing, dismiss it so this full Activity takes over
         LockOverlayManager.dismiss(this)

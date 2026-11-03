@@ -10,7 +10,7 @@ import android.os.Build
 import android.os.Process
 import android.provider.Settings
 import android.util.Log
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import android.app.NotificationChannel
@@ -18,13 +18,15 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import androidx.core.app.NotificationCompat
 import android.app.Activity
+import android.os.Bundle
+import androidx.activity.enableEdgeToEdge
 import com.google.android.play.core.appupdate.AppUpdateInfo
 import com.google.android.play.core.appupdate.AppUpdateManager
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
 import com.google.android.play.core.install.model.AppUpdateType
 import com.google.android.play.core.install.model.UpdateAvailability
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
 
     private val CHANNEL = "com.doomsblocker.app/control"
     private lateinit var prefs: AppPreferences
@@ -33,6 +35,11 @@ class MainActivity : FlutterActivity() {
     private val REQUEST_CODE_DEVICE_CREDENTIAL = 9002
     private val REQUEST_CODE_NOTIFICATION = 9003
     private var pendingAuthResult: MethodChannel.Result? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
