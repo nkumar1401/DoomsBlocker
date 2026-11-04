@@ -61,6 +61,10 @@ Any code change that violates these invariants is considered a build-breaking de
 * Payment app events must immediately return without updating `activePackage`, querying node hierarchies, or evaluating lockouts.
 * Sideloading warning mitigation: Users must install via Google Play Store (Closed Testing / Production) to ensure `packageManager.getInstallerPackageName() == "com.android.vending"` so Google Play Protect and Google Pay recognize the installation as verified and secure.
 
+### Invariant 7: Commercial Monetization Model & Google Play Policy Alignment
+* **DoomsBlocker Monetization Model**: While Adult Mode and Library Study Zone are 100% free, **Kids Mode is a commercial subscription product** (9-day free trial followed by a paid annual subscription / prepaid pass of ₹9.00/year via Google Play Billing doomsblocker_kids_annual_9inr, as specified in Sections 7 & 10 of SPECIFICATIONS.md).
+* **Play Console Policy & Declaration Consistency**: Before offering ANY advice or answering questions regarding Google Play Console declarations (such as Trader Status under EU DSA, App Access, Financial Disclosures, In-App Billing, or Data Safety), the agent must **always verify the monetization specifications**. The developer must always be guided to declare **Trader Status**, active Google Play Billing, and proper merchant terms. Never recommend 'Non-Trader' or 'free hobbyist' configurations that contradict the paid Kids Mode subscription or risk account suspension.
+
 ---
 
 ## 3. Key File Map & Responsibilities
