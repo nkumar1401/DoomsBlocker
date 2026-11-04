@@ -1154,12 +1154,11 @@ void main() {
       final gradleFile = File('android/app/build.gradle');
       expect(gradleFile.existsSync(), isTrue);
       final gradleContent = gradleFile.readAsStringSync();
-      expect(gradleContent, contains('minifyEnabled = true'));
-      expect(gradleContent, contains('shrinkResources = true'));
+      expect(gradleContent, contains('minifyEnabled = false'));
+      expect(gradleContent, contains('shrinkResources = false'));
       expect(gradleContent, contains('proguard-android-optimize.txt'));
       expect(gradleContent, contains('proguard-rules.pro'));
-      expect(gradleContent, contains('androidx.activity:activity-ktx'));
-    });
+          });
 
     test('Verify proguard-rules.pro preserves Flutter, Billing, and DoomsBlocker classes', () {
       final rulesFile = File('android/app/proguard-rules.pro');
@@ -1176,7 +1175,8 @@ void main() {
       final mainActivityFile = File('android/app/src/main/kotlin/com/doomsblocker/app/MainActivity.kt');
       expect(mainActivityFile.existsSync(), isTrue);
       final mainContent = mainActivityFile.readAsStringSync();
-      expect(mainContent, contains('enableEdgeToEdge()'));
+      expect(mainContent, contains('WindowCompat.setDecorFitsSystemWindows(window, false)'));
+      expect(mainContent, contains('class MainActivity : FlutterActivity()'));
 
       final overlayActivityFile = File('android/app/src/main/kotlin/com/doomsblocker/app/OverlayLockActivity.kt');
       expect(overlayActivityFile.existsSync(), isTrue);

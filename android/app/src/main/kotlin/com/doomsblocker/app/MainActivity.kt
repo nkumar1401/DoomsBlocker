@@ -10,7 +10,8 @@ import android.os.Build
 import android.os.Process
 import android.provider.Settings
 import android.util.Log
-import io.flutter.embedding.android.FlutterFragmentActivity
+import io.flutter.embedding.android.FlutterActivity
+import androidx.core.view.WindowCompat
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import android.app.NotificationChannel
@@ -19,14 +20,13 @@ import android.app.PendingIntent
 import androidx.core.app.NotificationCompat
 import android.app.Activity
 import android.os.Bundle
-import androidx.activity.enableEdgeToEdge
 import com.google.android.play.core.appupdate.AppUpdateInfo
 import com.google.android.play.core.appupdate.AppUpdateManager
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
 import com.google.android.play.core.install.model.AppUpdateType
 import com.google.android.play.core.install.model.UpdateAvailability
 
-class MainActivity : FlutterFragmentActivity() {
+class MainActivity : FlutterActivity() {
 
     private val CHANNEL = "com.doomsblocker.app/control"
     private lateinit var prefs: AppPreferences
@@ -37,8 +37,8 @@ class MainActivity : FlutterFragmentActivity() {
     private var pendingAuthResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
