@@ -46,7 +46,7 @@ class AnnouncementModal extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         border: Border(top: BorderSide(color: Color(0xFF334155), width: 1.5)),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + MediaQuery.of(context).padding.bottom + 16),
       child: SafeArea(
         top: false,
         child: Column(

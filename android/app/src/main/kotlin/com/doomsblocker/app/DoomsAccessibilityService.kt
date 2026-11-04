@@ -210,6 +210,53 @@ class DoomsAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun detectActivePipPackage(): String? {
+        try {
+            val windowList = windows ?: return null
+            val displayMetrics = resources.displayMetrics
+            val maxPipWidth = (displayMetrics.widthPixels * 0.90).toInt()
+            val maxPipHeight = (displayMetrics.heightPixels * 0.90).toInt()
+
+            for (win in windowList) {
+                var isPip = false
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    try {
+                        val method = win.javaClass.getMethod("isInPictureInPictureMode")
+                        isPip = method.invoke(win) as? Boolean ?: false
+                    } catch (_: Exception) {}
+                }
+                val bounds = Rect()
+                win.getBoundsInScreen(bounds)
+                val isSmallerWindow = bounds.width() in 51..maxPipWidth && bounds.height() in 51..maxPipHeight
+
+                val root = win.root
+                if (root != null) {
+                    try {
+                        val pkg = root.packageName?.toString()
+                        if (pkg != null) {
+                            if (pkg == YOUTUBE_PACKAGE) {
+                                // If YouTube window is visible on screen while the active app is NOT YouTube (e.g. Launcher or other app),
+                                // or if isInPictureInPictureMode / smaller window bounds match, it is definitely in PiP!
+                                if (isPip || isSmallerWindow || activePackage != YOUTUBE_PACKAGE) {
+                                    return YOUTUBE_PACKAGE
+                                }
+                            } else if (isBrowserPackage(pkg)) {
+                                if (isPip || isSmallerWindow) {
+                                    return pkg
+                                }
+                            }
+                        }
+                    } finally {
+                        root.recycle()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error detecting active PiP package: ${e.message}")
+        }
+        return null
+    }
+
     // Dedicated YouTube Shorts View & Layout IDs
     private val shortsViewIds = listOf(
         "com.google.android.youtube:id/reel_watch_fragment_root",
@@ -1009,6 +1056,21 @@ class DoomsAccessibilityService : AccessibilityService() {
         val rootNode = rootInActiveWindow
         val windowPkg = rootNode?.packageName?.toString() ?: activePackage
 
+        // Detect if YouTube or a browser is active in Picture-in-Picture (PiP) mode
+        val pipPkg = detectActivePipPackage()
+        val isPipActive = (pipPkg == YOUTUBE_PACKAGE) || (pipPkg != null && isBrowserPackage(pipPkg))
+
+        if (prefs.isKidsModeEnabled && isPipActive) {
+            val isYtLocked = prefs.youtubeLockUntilTimestamp > now ||
+                (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
+            if (isYtLocked && canTriggerLockAction()) {
+                Log.w(TAG, "Periodic tick: Kids Mode active and YouTube limit reached in PiP! Ejecting...")
+                destroyBackgroundMediaAndPlayer(pipPkg ?: YOUTUBE_PACKAGE)
+                dismissPictureInPictureIfPresent()
+                OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = pipPkg ?: YOUTUBE_PACKAGE)
+            }
+        }
+
         val isMandatoryOverride = prefs.isStudyZoneActive || prefs.isKidsModeEnabled
 
         if (windowPkg == YOUTUBE_PACKAGE && (isMandatoryOverride || prefs.isShortFormMonitored(YOUTUBE_PACKAGE))) {
@@ -1189,15 +1251,16 @@ class DoomsAccessibilityService : AccessibilityService() {
 
         // 1. Screen Time Tracking
         if (prefs.isKidsModeEnabled) {
-            // Kids Mode: Long-form YouTube on native app OR supported web browser increments screen time!
+            // Kids Mode: Long-form YouTube on native app OR supported web browser OR active PiP increments screen time!
             val isKidsYouTubeActive = (activePackage == YOUTUBE_PACKAGE) ||
-                (activePackage != null && isBrowserPackage(activePackage!!) && isInsideWebYouTube)
+                (activePackage != null && isBrowserPackage(activePackage!!) && isInsideWebYouTube) ||
+                isPipActive
 
             if (isKidsYouTubeActive) {
                 prefs.addShortsUsedSeconds(deltaSeconds)
                 val usedSec = prefs.shortsUsedSecondsToday
                 val limitSec = prefs.shortsLimitMinutes * 60
-                val targetPkg = activePackage ?: YOUTUBE_PACKAGE
+                val targetPkg = if (isPipActive && pipPkg != null) pipPkg else (activePackage ?: YOUTUBE_PACKAGE)
                 if (usedSec >= limitSec) {
                     if (canTriggerLockAction()) {
                         Log.w(TAG, "Kids Mode: Long-form YouTube limit reached ($usedSec >= $limitSec s)! Setting 30m cooldown...")

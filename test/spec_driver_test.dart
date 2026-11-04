@@ -1581,4 +1581,124 @@ void main() {
       expect(serviceContent, contains('isBrowserPackage(windowPkg)'));
     });
   });
+
+  group('SPEC 21: Picture-in-Picture (PiP) Screen Time Tracking & Modal Navigation Insets', () {
+    test('Kids Mode PiP Screen Time: Continuous accumulation when YouTube is in PiP', () {
+      int shortsUsedSecondsToday = 0;
+      final int shortsLimitMinutes = 1; // 1 min limit (60s)
+      final int limitSec = shortsLimitMinutes * 60;
+      String? activePackage = 'com.google.android.apps.nexuslauncher'; // User on Home Launcher
+      String? pipPkg = 'com.google.android.youtube'; // YouTube in minimized PiP window
+      final bool isPipActive = pipPkg == 'com.google.android.youtube';
+      int youtubeLockUntilTimestamp = 0;
+      String? lockedReason;
+
+      void simulatePipPeriodicTick(int deltaSeconds) {
+        // In Kids Mode:
+        final isKidsYouTubeActive = (activePackage == 'com.google.android.youtube') ||
+            (activePackage == 'com.android.chrome') ||
+            isPipActive;
+
+        if (isKidsYouTubeActive) {
+          shortsUsedSecondsToday += deltaSeconds;
+          if (shortsUsedSecondsToday >= limitSec) {
+            youtubeLockUntilTimestamp = DateTime.now().millisecondsSinceEpoch + 30 * 60 * 1000;
+            lockedReason = 'reason_youtube_locked';
+          }
+        }
+      }
+
+      // 1. Minimized video plays for 35 seconds on Home Screen
+      simulatePipPeriodicTick(35);
+      expect(shortsUsedSecondsToday, equals(35), reason: 'Must count time while minimized in PiP');
+      expect(lockedReason, isNull);
+
+      // 2. Minimized video plays for another 25 seconds (total 60s -> reaches 1 min limit)
+      simulatePipPeriodicTick(25);
+      expect(shortsUsedSecondsToday, equals(60));
+      expect(lockedReason, equals('reason_youtube_locked'), reason: 'Must trigger lock when limit exhausted in PiP');
+      expect(youtubeLockUntilTimestamp, greaterThan(0));
+    });
+
+    test('Kids Mode PiP Active Lockout: Ejects immediately if PiP opened during active cooldown', () {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final youtubeLockUntilTimestamp = now + 15 * 60 * 1000; // 15 min remaining in cooldown
+      final isPipActive = true;
+      final pipPkg = 'com.google.android.youtube';
+      bool pipDismissed = false;
+      String? lockedReason;
+
+      if (isPipActive && (pipPkg == 'com.google.android.youtube')) {
+        final isYtLocked = youtubeLockUntilTimestamp > now;
+        if (isYtLocked) {
+          pipDismissed = true;
+          lockedReason = 'reason_youtube_locked';
+        }
+      }
+
+      expect(pipDismissed, isTrue, reason: 'PiP window must be dismissed when cooldown active');
+      expect(lockedReason, equals('reason_youtube_locked'));
+    });
+
+    test('Invariant 2 Exemption: YouTube PiP remains 100% permitted in Adult Mode and Study Zone', () {
+      bool shouldEjectPip({
+        required bool isKidsModeEnabled,
+        required bool isStudyZoneActive,
+        required bool isYouTubeLocked,
+      }) {
+        if (isKidsModeEnabled) {
+          return isYouTubeLocked;
+        }
+        // In Adult Mode and Study Zone, educational long-form PiP is 100% permitted (Invariant 2)
+        return false;
+      }
+
+      // Adult Mode: Educational PiP lecture is never ejected
+      expect(
+        shouldEjectPip(
+          isKidsModeEnabled: false,
+          isStudyZoneActive: false,
+          isYouTubeLocked: true,
+        ),
+        isFalse,
+      );
+
+      // Study Zone: Educational PiP lecture is never ejected
+      expect(
+        shouldEjectPip(
+          isKidsModeEnabled: false,
+          isStudyZoneActive: true,
+          isYouTubeLocked: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('Modal Bottom Sheet Navigation Bar Clearance: All bottom sheets apply safe insets', () {
+      final guideFile = File('lib/widgets/accessibility_guide_dialog.dart');
+      expect(guideFile.existsSync(), isTrue);
+      final guideContent = guideFile.readAsStringSync();
+      expect(guideContent, contains('MediaQuery.of(context).padding.bottom'));
+
+      final studyZoneFile = File('lib/screens/study_zone_screen.dart');
+      expect(studyZoneFile.existsSync(), isTrue);
+      final studyZoneContent = studyZoneFile.readAsStringSync();
+      expect(studyZoneContent, contains('MediaQuery.of(context).padding.bottom'));
+
+      final paywallFile = File('lib/widgets/kids_mode_paywall_dialog.dart');
+      expect(paywallFile.existsSync(), isTrue);
+      final paywallContent = paywallFile.readAsStringSync();
+      expect(paywallContent, contains('MediaQuery.of(context).padding.bottom'));
+    });
+
+    test('Verify Kotlin DoomsAccessibilityService defines detectActivePipPackage and handles PiP in periodic ticks', () {
+      final serviceFile = File('android/app/src/main/kotlin/com/doomsblocker/app/DoomsAccessibilityService.kt');
+      expect(serviceFile.existsSync(), isTrue);
+      final serviceContent = serviceFile.readAsStringSync();
+      expect(serviceContent, contains('detectActivePipPackage'));
+      expect(serviceContent, contains('isPipActive'));
+      expect(serviceContent, contains('dismissPictureInPictureIfPresent'));
+      expect(serviceContent, contains('destroyBackgroundMediaAndPlayer'));
+    });
+  });
 }

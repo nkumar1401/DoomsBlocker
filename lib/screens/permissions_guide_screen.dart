@@ -138,7 +138,7 @@ class _PermissionsGuideScreenState extends State<PermissionsGuideScreen> with Wi
 
           : ListView(
 
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 32 + MediaQuery.of(context).padding.bottom + 48),
 
               children: [
 

@@ -297,12 +297,13 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
       builder: (ctx) => StatefulBuilder(
         builder: (context, setSheetState) {
           return Container(
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.fromLTRB(24, 20, 24, 24 + MediaQuery.of(context).padding.bottom + 24),
             decoration: const BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             ),
-            child: Column(
+            child: SingleChildScrollView(
+              child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -476,6 +477,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
                 const SizedBox(height: 12),
               ],
             ),
+            ),
           );
         },
       ),
@@ -587,7 +589,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
 
   Widget _buildActiveStudyView() {
     return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(20, 24, 20, 24 + MediaQuery.of(context).padding.bottom + 32),
+      padding: EdgeInsets.fromLTRB(20, 24, 20, 32 + MediaQuery.of(context).padding.bottom + 48),
       child: Column(
         children: [
           // Active session glowing badge
@@ -782,7 +784,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
 
   Widget _buildCheckInView() {
     return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(20, 24, 20, 24 + MediaQuery.of(context).padding.bottom + 32),
+      padding: EdgeInsets.fromLTRB(20, 24, 20, 32 + MediaQuery.of(context).padding.bottom + 48),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1014,7 +1016,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
     final exitPayload = 'DOOMSBLOCKER_STUDY:OUT:$_customLibraryName';
 
     return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + MediaQuery.of(context).padding.bottom + 32),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 32 + MediaQuery.of(context).padding.bottom + 48),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

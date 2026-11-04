@@ -190,7 +190,7 @@ class _ShortsSettingsScreenState extends State<ShortsSettingsScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFFEF4444)))
           : ListView(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + MediaQuery.of(context).padding.bottom + 32),
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 32 + MediaQuery.of(context).padding.bottom + 48),
               children: [
                 // Info Box
                 Container(

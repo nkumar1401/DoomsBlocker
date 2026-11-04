@@ -109,10 +109,12 @@ class _DurationPickerDialogState extends State<DurationPickerDialog> {
           ),
         ],
       ),
-      padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + MediaQuery.of(context).padding.bottom + 16),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + MediaQuery.of(context).padding.bottom + 24),
       child: SafeArea(
         top: false,
-        child: Column(
+        child: SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -382,6 +384,7 @@ class _DurationPickerDialogState extends State<DurationPickerDialog> {
               ),
             ),
           ],
+        ),
         ),
       ),
     );

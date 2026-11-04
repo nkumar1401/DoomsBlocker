@@ -382,3 +382,21 @@ ightarrow$ "Allow restricted settings" without manual searching.
 * **3-Hour Maximum Boundary**: Custom scroll limit is strictly capped at 3 hours (180 minutes). The hours picker restricts items to `0..3`. When 3 hours is selected, minutes are constrained to 0.
 * **Informative Validation Feedback**: If duration exceeds the configured maximum, the confirm button is disabled and displays `'Cannot exceed ${_formatPreview(widget.maxMinutes)}'` rather than misleading min-limit labels.
 
+---
+
+## 18. Picture-in-Picture (PiP) Screen Time Tracking & Modal Navigation Insets
+
+### 18.1 Kids Mode Picture-in-Picture (PiP) Continuous Screen Time Tracking
+* **On-Screen PiP Window Detection**: When YouTube is minimized into Picture-in-Picture mode on the Home launcher or over another application, `DoomsAccessibilityService.kt` inspects the active `windows` collection using `flagRetrieveInteractiveWindows`.
+* **Continuous Allowance Counting**: In Parents Mode (`prefs.isKidsModeEnabled == true`), YouTube playback in PiP mode contributes continuously to `prefs.shortsUsedSecondsToday` second-by-second via `onPeriodicTick()`.
+* **Lockout Ejection & Dismissal**: As soon as `shortsUsedSecondsToday >= shortsLimitMinutes * 60` or when a 30-minute cooldown is active (`youtubeLockUntilTimestamp > now`):
+  1. Background media and audio are immediately silenced with `destroyBackgroundMediaAndPlayer()`.
+  2. The floating PiP window is dismissed using `dismissPictureInPictureIfPresent()`.
+  3. `OverlayLockActivity.start(REASON_YOUTUBE_LOCKED)` is displayed in fullscreen.
+* **Adult Focus Mode & Study Zone Immunity**: In Adult Mode and Library Study Zone, educational long-form videos playing in PiP remain 100% permitted (Invariant 2).
+
+### 18.2 Modal Bottom Sheet Navigation Bar Clearance
+* **Universal Bottom Sheet Insets**: All modal bottom sheets (`AccessibilityGuideDialog`, `_showGoalPickerSheet`, `KidsModePaywallDialog`, `AnnouncementModal`) must apply `MediaQuery.of(context).padding.bottom + 16` (or at least 32dp) to their bottom container padding.
+* **Button Visibility**: Primary action buttons (`Continue to Accessibility Settings`, `Lock Focus & Start Studying`, and checkout CTAs) must float completely clear of the Android 3-button system navigation bar.
+
+
