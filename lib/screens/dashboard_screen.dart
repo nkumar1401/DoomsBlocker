@@ -206,7 +206,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                           color: const Color(0xFF06B6D4),
                           child: ListView(
                             physics: const BouncingScrollPhysics(),
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                            padding: EdgeInsets.fromLTRB(18, 8, 18, 16 + MediaQuery.of(context).padding.bottom + 32),
                             children: [
                               if (_hasMissingPermissions) _buildPermissionWarningBanner(),
                               if (_isAggressiveOem) _buildOemOptimizationCard(),

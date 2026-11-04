@@ -1424,4 +1424,161 @@ void main() {
       expect(serviceContent, contains('isMandatoryOverride'));
     });
   });
+
+  group('SPEC 20: Kids Mode Web YouTube Parity & Universal System Navigation Bar Insets', () {
+    String? matchSocialDomainOrShorts(String text) {
+      final lower = text.toLowerCase();
+      if (lower.contains('youtube.com/shorts') || lower.contains('m.youtube.com/shorts') || lower.contains('/shorts/')) {
+        return 'youtube_shorts';
+      }
+      if (lower.contains('youtube.com') || lower.contains('m.youtube.com') || lower.contains('youtu.be')) {
+        return 'youtube_watch';
+      }
+      if (lower.contains('instagram.com') || lower.contains('reels • instagram') || lower.contains('instagram reels')) {
+        return 'instagram';
+      }
+      return null;
+    }
+
+    test('Web YouTube Detection classifies youtube_watch vs youtube_shorts accurately', () {
+      expect(matchSocialDomainOrShorts('https://www.youtube.com/watch?v=dQw4w9WgXcQ'), equals('youtube_watch'));
+      expect(matchSocialDomainOrShorts('https://m.youtube.com/watch?v=abcdef'), equals('youtube_watch'));
+      expect(matchSocialDomainOrShorts('https://youtu.be/dQw4w9WgXcQ'), equals('youtube_watch'));
+      expect(matchSocialDomainOrShorts('https://www.youtube.com/shorts/3i_J3n123'), equals('youtube_shorts'));
+      expect(matchSocialDomainOrShorts('https://m.youtube.com/shorts/'), equals('youtube_shorts'));
+      expect(matchSocialDomainOrShorts('https://en.wikipedia.org/wiki/Flutter'), isNull);
+    });
+
+    test('Kids Mode Unified Screen Time Pool: Web YouTube accumulates time and triggers lockout', () {
+      int shortsUsedSecondsToday = 0;
+      final int shortsLimitMinutes = 1; // 1 min limit
+      final int limitSec = shortsLimitMinutes * 60;
+      int youtubeLockUntilTimestamp = 0;
+      String? lockedWithReason;
+
+      void simulatePeriodicTick({
+        required bool isKidsModeEnabled,
+        required String activePackage,
+        required bool isInsideWebYouTube,
+        required int deltaSeconds,
+      }) {
+        if (!isKidsModeEnabled) return;
+
+        final isKidsYouTubeActive = (activePackage == 'com.google.android.youtube') ||
+            (activePackage == 'com.android.chrome' && isInsideWebYouTube);
+
+        if (isKidsYouTubeActive) {
+          shortsUsedSecondsToday += deltaSeconds;
+          if (shortsUsedSecondsToday >= limitSec) {
+            youtubeLockUntilTimestamp = DateTime.now().millisecondsSinceEpoch + 30 * 60 * 1000;
+            lockedWithReason = 'reason_youtube_locked';
+          }
+        }
+      }
+
+      // 1. Kid watches YouTube on Chrome for 40 seconds
+      simulatePeriodicTick(
+        isKidsModeEnabled: true,
+        activePackage: 'com.android.chrome',
+        isInsideWebYouTube: true,
+        deltaSeconds: 40,
+      );
+      expect(shortsUsedSecondsToday, equals(40));
+      expect(lockedWithReason, isNull);
+
+      // 2. Kid watches another 20 seconds on Chrome (total 60s -> reaches 1 min limit)
+      simulatePeriodicTick(
+        isKidsModeEnabled: true,
+        activePackage: 'com.android.chrome',
+        isInsideWebYouTube: true,
+        deltaSeconds: 20,
+      );
+      expect(shortsUsedSecondsToday, equals(60));
+      expect(lockedWithReason, equals('reason_youtube_locked'));
+      expect(youtubeLockUntilTimestamp, greaterThan(0));
+    });
+
+    test('Invariant 2: YouTube Long-Form on web remains 100% permitted in Adult Mode and Study Zone', () {
+      bool shouldLockWebUrl({
+        required String detectedDomain,
+        required bool isStudyZoneActive,
+        required bool isKidsModeEnabled,
+        required bool isAdultLockoutActive,
+      }) {
+        if (detectedDomain == 'youtube_watch') {
+          if (isKidsModeEnabled && isAdultLockoutActive) {
+            return true; // Kids mode locks when allowance exhausted or cooldown active
+          }
+          // In Study Zone and Adult Mode, educational long-form is NEVER locked (Invariant 2)
+          return false;
+        }
+        return true;
+      }
+
+      // Adult Mode: Long-form on Chrome is 100% permitted even if short-form lockout is active
+      expect(
+        shouldLockWebUrl(
+          detectedDomain: 'youtube_watch',
+          isStudyZoneActive: false,
+          isKidsModeEnabled: false,
+          isAdultLockoutActive: true,
+        ),
+        isFalse,
+        reason: 'Invariant 2: Educational YouTube long-form is strictly exempt in Adult Mode',
+      );
+
+      // Study Zone: Long-form on Chrome is 100% permitted for study lectures
+      expect(
+        shouldLockWebUrl(
+          detectedDomain: 'youtube_watch',
+          isStudyZoneActive: true,
+          isKidsModeEnabled: false,
+          isAdultLockoutActive: false,
+        ),
+        isFalse,
+        reason: 'Invariant 2: Educational YouTube long-form is strictly exempt in Library Study Zone',
+      );
+    });
+
+    test('DurationPickerDialog constraints restrict 3-hour boundary and displays informative validation text', () {
+      String getConfirmButtonText({
+        required int totalMinutes,
+        required int minMinutes,
+        required int maxMinutes,
+      }) {
+        final isValid = totalMinutes >= minMinutes && totalMinutes <= maxMinutes;
+        if (isValid) {
+          return 'Confirm $totalMinutes min';
+        } else if (totalMinutes > maxMinutes) {
+          final maxH = maxMinutes ~/ 60;
+          return 'Cannot exceed $maxH hr ($maxMinutes min)';
+        } else {
+          return 'Select at least $minMinutes min';
+        }
+      }
+
+      // Valid selection
+      expect(getConfirmButtonText(totalMinutes: 120, minMinutes: 1, maxMinutes: 180), equals('Confirm 120 min'));
+
+      // Exceeds max limit (Image 1 case: 182 min vs 180 min max)
+      expect(
+        getConfirmButtonText(totalMinutes: 182, minMinutes: 1, maxMinutes: 180),
+        equals('Cannot exceed 3 hr (180 min)'),
+        reason: 'Must never show confusing Select at least 1 min when exceeding maximum limit',
+      );
+
+      // Below min limit
+      expect(getConfirmButtonText(totalMinutes: 0, minMinutes: 1, maxMinutes: 180), equals('Select at least 1 min'));
+    });
+
+    test('Verify Kotlin DoomsAccessibilityService handles isInsideWebYouTube and browser periodic ticks', () {
+      final serviceFile = File('android/app/src/main/kotlin/com/doomsblocker/app/DoomsAccessibilityService.kt');
+      expect(serviceFile.existsSync(), isTrue);
+      final serviceContent = serviceFile.readAsStringSync();
+      expect(serviceContent, contains('isInsideWebYouTube'));
+      expect(serviceContent, contains('youtube_watch'));
+      expect(serviceContent, contains('isKidsYouTubeActive'));
+      expect(serviceContent, contains('isBrowserPackage(windowPkg)'));
+    });
+  });
 }

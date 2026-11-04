@@ -232,7 +232,7 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
                           ),
                         )
                       : ListView.separated(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                          padding: EdgeInsets.fromLTRB(16, 6, 16, 16 + MediaQuery.of(context).padding.bottom + 32),
                           itemCount: _filteredApps.length,
                           separatorBuilder: (_, __) => const SizedBox(height: 8),
                           itemBuilder: (context, index) {

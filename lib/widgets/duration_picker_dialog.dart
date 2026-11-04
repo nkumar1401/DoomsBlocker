@@ -109,7 +109,7 @@ class _DurationPickerDialogState extends State<DurationPickerDialog> {
           ),
         ],
       ),
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + MediaQuery.of(context).padding.bottom + 16),
       child: SafeArea(
         top: false,
         child: Column(
@@ -232,7 +232,16 @@ class _DurationPickerDialogState extends State<DurationPickerDialog> {
                             magnification: 1.2,
                             useMagnifier: true,
                             onSelectedItemChanged: (idx) {
-                              setState(() => _selectedHours = idx);
+                              setState(() {
+                                _selectedHours = idx;
+                                if (_totalMinutes > widget.maxMinutes) {
+                                  final rem = widget.maxMinutes - (_selectedHours * 60);
+                                  _selectedMinutes = rem.clamp(0, 59);
+                                  if (_minuteController.hasClients) {
+                                    _minuteController.jumpToItem(_selectedMinutes);
+                                  }
+                                }
+                              });
                             },
                             children: List.generate(maxH + 1, (i) {
                               return Center(
@@ -278,7 +287,16 @@ class _DurationPickerDialogState extends State<DurationPickerDialog> {
                             magnification: 1.2,
                             useMagnifier: true,
                             onSelectedItemChanged: (idx) {
-                              setState(() => _selectedMinutes = idx);
+                              setState(() {
+                                _selectedMinutes = idx;
+                                if (_totalMinutes > widget.maxMinutes) {
+                                  final rem = widget.maxMinutes - (_selectedHours * 60);
+                                  _selectedMinutes = rem.clamp(0, 59);
+                                  if (_minuteController.hasClients) {
+                                    _minuteController.jumpToItem(_selectedMinutes);
+                                  }
+                                }
+                              });
                             },
                             children: List.generate(60, (i) {
                               return Center(
@@ -350,7 +368,11 @@ class _DurationPickerDialogState extends State<DurationPickerDialog> {
                     ? () => Navigator.pop(context, _totalMinutes)
                     : null,
                 child: Text(
-                  isValid ? 'Confirm ${_formatPreview(_totalMinutes)}' : 'Select at least ${widget.minMinutes} min',
+                  isValid
+                      ? 'Confirm ${_formatPreview(_totalMinutes)}'
+                      : (_totalMinutes > widget.maxMinutes
+                          ? 'Cannot exceed ${_formatPreview(widget.maxMinutes)}'
+                          : 'Select at least ${widget.minMinutes} min'),
                   style: TextStyle(
                     color: isValid ? Colors.white : const Color(0xFF94A3B8),
                     fontWeight: FontWeight.bold,

@@ -118,7 +118,7 @@ class _KidsModeScreenState extends State<KidsModeScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF10B981)))
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + MediaQuery.of(context).padding.bottom + 32),
               children: [
                 // 1. Trial / Subscription Status Card
                 _buildSubscriptionStatusBanner(),

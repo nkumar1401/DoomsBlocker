@@ -103,6 +103,7 @@ class DoomsAccessibilityService : AccessibilityService() {
     private var isInsidePureShortForm = false
     private var isInsideWebShorts = false
     private var isInsideWebReels = false
+    private var isInsideWebYouTube = false
     private var lastActiveTimeMillis = 0L
     private var lastLockActionTimeMillis = 0L
 
@@ -398,6 +399,7 @@ class DoomsAccessibilityService : AccessibilityService() {
             isInsidePureShortForm = false
             isInsideWebShorts = false
             isInsideWebReels = false
+            isInsideWebYouTube = false
         }
     }
 
@@ -1007,7 +1009,9 @@ class DoomsAccessibilityService : AccessibilityService() {
         val rootNode = rootInActiveWindow
         val windowPkg = rootNode?.packageName?.toString() ?: activePackage
 
-        if (windowPkg == YOUTUBE_PACKAGE && prefs.isShortFormMonitored(YOUTUBE_PACKAGE)) {
+        val isMandatoryOverride = prefs.isStudyZoneActive || prefs.isKidsModeEnabled
+
+        if (windowPkg == YOUTUBE_PACKAGE && (isMandatoryOverride || prefs.isShortFormMonitored(YOUTUBE_PACKAGE))) {
             activePackage = YOUTUBE_PACKAGE
             isInsideReels = false
             isInsideSpotlight = false
@@ -1031,7 +1035,7 @@ class DoomsAccessibilityService : AccessibilityService() {
                     OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = YOUTUBE_PACKAGE)
                 }
             }
-        } else if (windowPkg == INSTAGRAM_PACKAGE && prefs.isShortFormMonitored(INSTAGRAM_PACKAGE)) {
+        } else if (windowPkg == INSTAGRAM_PACKAGE && (isMandatoryOverride || prefs.isShortFormMonitored(INSTAGRAM_PACKAGE))) {
             activePackage = INSTAGRAM_PACKAGE
             isInsideShorts = false
             isInsideReels = true
@@ -1052,7 +1056,7 @@ class DoomsAccessibilityService : AccessibilityService() {
                     )
                 }
             }
-        } else if (windowPkg == SNAPCHAT_PACKAGE && prefs.isShortFormMonitored(SNAPCHAT_PACKAGE)) {
+        } else if (windowPkg == SNAPCHAT_PACKAGE && (isMandatoryOverride || prefs.isShortFormMonitored(SNAPCHAT_PACKAGE))) {
             activePackage = SNAPCHAT_PACKAGE
             isInsideShorts = false
             isInsideReels = false
@@ -1076,7 +1080,7 @@ class DoomsAccessibilityService : AccessibilityService() {
                     )
                 }
             }
-        } else if (windowPkg != null && isPureShortFormPackage(windowPkg) && prefs.isShortFormMonitored(windowPkg)) {
+        } else if (windowPkg != null && isPureShortFormPackage(windowPkg) && (isMandatoryOverride || prefs.isShortFormMonitored(windowPkg))) {
             activePackage = windowPkg
             isInsideShorts = false
             isInsideReels = false
@@ -1093,6 +1097,86 @@ class DoomsAccessibilityService : AccessibilityService() {
                     targetPackage = windowPkg
                 )
             }
+        } else if (windowPkg != null && isBrowserPackage(windowPkg)) {
+            activePackage = windowPkg
+            isInsideShorts = false
+            isInsideReels = false
+            isInsideSpotlight = false
+            isInsidePureShortForm = false
+
+            if (rootNode != null) {
+                try {
+                    val detected = detectBrowserUrlOrDomain(rootNode, windowPkg)
+                    when (detected) {
+                        "youtube_shorts" -> {
+                            isInsideWebShorts = true
+                            isInsideWebReels = false
+                            isInsideWebYouTube = false
+                        }
+                        "youtube_watch" -> {
+                            isInsideWebShorts = false
+                            isInsideWebReels = false
+                            isInsideWebYouTube = true
+                        }
+                        "instagram", "facebook", "tiktok", "snapchat", "twitter", "reddit", "pure_short_form" -> {
+                            isInsideWebShorts = false
+                            isInsideWebReels = true
+                            isInsideWebYouTube = false
+                        }
+                        else -> {
+                            isInsideWebShorts = false
+                            isInsideWebReels = false
+                            isInsideWebYouTube = false
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in browser periodic tick: ${e.message}")
+                }
+            }
+
+            if (prefs.isKidsModeEnabled) {
+                if (isInsideWebYouTube) {
+                    val isYtLocked = prefs.youtubeLockUntilTimestamp > now ||
+                        (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
+                    if (isYtLocked && canTriggerLockAction()) {
+                        Log.w(TAG, "Periodic tick: Kids Mode web YouTube limit reached! Ejecting...")
+                        destroyBackgroundMediaAndPlayer(windowPkg)
+                        dismissPictureInPictureIfPresent()
+                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = windowPkg)
+                    }
+                } else if (isInsideWebShorts) {
+                    if (canTriggerLockAction()) {
+                        destroyBackgroundMediaAndPlayer(windowPkg)
+                        dismissPictureInPictureIfPresent()
+                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_KIDS_SHORTS_BLOCKED, targetPackage = windowPkg)
+                    }
+                } else if (isInsideWebReels) {
+                    if (canTriggerLockAction()) {
+                        destroyBackgroundMediaAndPlayer(windowPkg)
+                        dismissPictureInPictureIfPresent()
+                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_KIDS_SOCIAL_BLOCKED, targetPackage = windowPkg)
+                    }
+                }
+            } else if (prefs.isStudyZoneActive) {
+                if (isInsideWebShorts || isInsideWebReels) {
+                    if (canTriggerLockAction()) {
+                        destroyBackgroundMediaAndPlayer(windowPkg)
+                        dismissPictureInPictureIfPresent()
+                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_STUDY_ZONE, prefs.studyZoneName, windowPkg)
+                    }
+                }
+            } else {
+                // Adult Focus Mode
+                val isShortFormLocked = prefs.youtubeLockUntilTimestamp > now ||
+                    (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
+                if (isShortFormLocked && (isInsideWebShorts || isInsideWebReels)) {
+                    if (canTriggerLockAction()) {
+                        destroyBackgroundMediaAndPlayer(windowPkg)
+                        dismissPictureInPictureIfPresent()
+                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_SHORTS_LIMIT, targetPackage = windowPkg)
+                    }
+                }
+            }
         } else {
             isInsideShorts = false
             isInsideReels = false
@@ -1100,22 +1184,27 @@ class DoomsAccessibilityService : AccessibilityService() {
             isInsidePureShortForm = false
             isInsideWebShorts = false
             isInsideWebReels = false
+            isInsideWebYouTube = false
         }
 
         // 1. Screen Time Tracking
         if (prefs.isKidsModeEnabled) {
-            // Kids Mode: Only long-form YouTube increments screen time (Shorts is ejected with 0s tolerance)
-            if (activePackage == YOUTUBE_PACKAGE) {
+            // Kids Mode: Long-form YouTube on native app OR supported web browser increments screen time!
+            val isKidsYouTubeActive = (activePackage == YOUTUBE_PACKAGE) ||
+                (activePackage != null && isBrowserPackage(activePackage!!) && isInsideWebYouTube)
+
+            if (isKidsYouTubeActive) {
                 prefs.addShortsUsedSeconds(deltaSeconds)
                 val usedSec = prefs.shortsUsedSecondsToday
                 val limitSec = prefs.shortsLimitMinutes * 60
+                val targetPkg = activePackage ?: YOUTUBE_PACKAGE
                 if (usedSec >= limitSec) {
                     if (canTriggerLockAction()) {
                         Log.w(TAG, "Kids Mode: Long-form YouTube limit reached ($usedSec >= $limitSec s)! Setting 30m cooldown...")
                         prefs.youtubeLockUntilTimestamp = now + 30 * 60 * 1000L
-                        destroyBackgroundMediaAndPlayer(YOUTUBE_PACKAGE)
+                        destroyBackgroundMediaAndPlayer(targetPkg)
                         dismissPictureInPictureIfPresent()
-                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = YOUTUBE_PACKAGE)
+                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = targetPkg)
                     }
                 }
             }
@@ -1257,8 +1346,36 @@ class DoomsAccessibilityService : AccessibilityService() {
         if (detected == null) {
             isInsideWebShorts = false
             isInsideWebReels = false
+            isInsideWebYouTube = false
             return
         }
+
+        if (detected == "youtube_watch") {
+            isInsideWebShorts = false
+            isInsideWebReels = false
+            isInsideWebYouTube = true
+
+            // Mode: Kids Mode Active -> Check if YouTube daily allowance is exhausted or cooldown is active
+            if (prefs.isKidsModeEnabled) {
+                val now = System.currentTimeMillis()
+                val isYtLocked = prefs.youtubeLockUntilTimestamp > now ||
+                    (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
+                if (isYtLocked && canTriggerLockAction()) {
+                    Log.w(TAG, "Kids Mode Active: Web YouTube locked (allowance exhausted or cooldown active)! Showing lock overlay...")
+                    destroyBackgroundMediaAndPlayer(browserPkg)
+                    dismissPictureInPictureIfPresent()
+                    OverlayLockActivity.start(
+                        this,
+                        OverlayLockActivity.REASON_YOUTUBE_LOCKED,
+                        targetPackage = browserPkg
+                    )
+                }
+            }
+            // In Study Zone and Adult Mode: YouTube long-form is 100% permitted (Invariant 2)
+            return
+        }
+
+        isInsideWebYouTube = false
 
         // Mode 1: Library Study Zone Active -> 100% immediate lockout
         if (prefs.isStudyZoneActive) {
@@ -1359,6 +1476,9 @@ class DoomsAccessibilityService : AccessibilityService() {
         val lower = text.lowercase(Locale.US)
         if (lower.contains("youtube.com/shorts") || lower.contains("m.youtube.com/shorts") || lower.contains("/shorts/")) {
             return "youtube_shorts"
+        }
+        if (lower.contains("youtube.com") || lower.contains("m.youtube.com") || lower.contains("youtu.be")) {
+            return "youtube_watch"
         }
         if (lower.contains("instagram.com") || lower.contains("reels • instagram") || lower.contains("instagram reels")) {
             return "instagram"

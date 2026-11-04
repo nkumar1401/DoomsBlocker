@@ -587,7 +587,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
 
   Widget _buildActiveStudyView() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      padding: EdgeInsets.fromLTRB(20, 24, 20, 24 + MediaQuery.of(context).padding.bottom + 32),
       child: Column(
         children: [
           // Active session glowing badge
@@ -782,7 +782,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
 
   Widget _buildCheckInView() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      padding: EdgeInsets.fromLTRB(20, 24, 20, 24 + MediaQuery.of(context).padding.bottom + 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1014,7 +1014,7 @@ class _StudyZoneScreenState extends State<StudyZoneScreen>
     final exitPayload = 'DOOMSBLOCKER_STUDY:OUT:$_customLibraryName';
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + MediaQuery.of(context).padding.bottom + 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

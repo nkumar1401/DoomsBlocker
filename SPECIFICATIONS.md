@@ -363,3 +363,22 @@ ightarrow$ "Allow restricted settings" without manual searching.
   2. **Parents Mode**: Social media websites trigger `REASON_KIDS_SOCIAL_BLOCKED`; `youtube.com/shorts` triggers `REASON_KIDS_SHORTS_BLOCKED`.
   3. **Adult Focus Mode**: Time spent on web reels/shorts contributes directly to the daily short-form pool. If the user is in an active cooldown lockout or daily limit is exhausted, web reels/shorts are locked with `REASON_SHORTS_LIMIT`.
 * **Study & Research Immunity**: Legitimate educational and productivity websites (Wikipedia, Google Docs, search engines, college portals, PDFs, tech docs) are 100% exempt from blocking and run with zero interference.
+
+---
+
+## 17. Kids Mode Web YouTube Parity & Edge-to-Edge Navigation Padding
+
+### 17.1 Kids Mode Web YouTube Screen Time & Lockout Parity
+* **Unified YouTube Screen Time Pool**: When Parents Mode is enabled (`prefs.isKidsModeEnabled == true`), long-form YouTube watching across both the native YouTube application (`com.google.android.youtube`) and all 18 supported web browsers (`youtube.com`, `m.youtube.com`, `youtu.be` without `/shorts/`) contributes to a single shared daily allowance (`prefs.shortsUsedSecondsToday`).
+* **Periodic Screen Time Accumulation**: When a browser is in the foreground displaying YouTube long-form, `onPeriodicTick()` accumulates seconds toward `prefs.shortsUsedSecondsToday`.
+* **Lockout Enforcement**: Once `shortsUsedSecondsToday >= shortsLimitMinutes * 60` or when a 30-minute cooldown is active (`youtubeLockUntilTimestamp > now`), accessing YouTube on the web in any browser immediately triggers `OverlayLockActivity(REASON_YOUTUBE_LOCKED)`.
+* **Educational Content Exemption Intact**: In Adult Focus Mode and Library Study Zone, long-form YouTube videos on web browsers remain 100% permitted (Invariant 2).
+
+### 17.2 Universal Edge-to-Edge Bottom Navigation Insets
+* **System 3-Button Navigation Bar Clearance**: On all screens (`ShortsSettingsScreen`, `StudyZoneScreen`, `KidsModeScreen`, `DashboardScreen`, `GameLimitsScreen`, `BlockedChannelsScreen`), scrollable containers (`ListView`, `SingleChildScrollView`) must apply bottom padding of `MediaQuery.of(context).padding.bottom + 32` (or at least 48dp) to ensure action buttons ("Save Rules", study cards, confirmation CTAs) are fully visible above the system navigation bar and never clipped or obscured.
+* **Duration Picker Bottom Sheet Insets**: `DurationPickerDialog` bottom padding includes `MediaQuery.of(context).padding.bottom + 16` ensuring confirm CTAs float comfortably above the Android navigation bar.
+
+### 17.3 Custom Scroll Limit Picker Boundary & Validation Invariant
+* **3-Hour Maximum Boundary**: Custom scroll limit is strictly capped at 3 hours (180 minutes). The hours picker restricts items to `0..3`. When 3 hours is selected, minutes are constrained to 0.
+* **Informative Validation Feedback**: If duration exceeds the configured maximum, the confirm button is disabled and displays `'Cannot exceed ${_formatPreview(widget.maxMinutes)}'` rather than misleading min-limit labels.
+
