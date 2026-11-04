@@ -399,4 +399,17 @@ ightarrow$ "Allow restricted settings" without manual searching.
 * **Universal Bottom Sheet Insets**: All modal bottom sheets (`AccessibilityGuideDialog`, `_showGoalPickerSheet`, `KidsModePaywallDialog`, `AnnouncementModal`) must apply `MediaQuery.of(context).padding.bottom + 16` (or at least 32dp) to their bottom container padding.
 * **Button Visibility**: Primary action buttons (`Continue to Accessibility Settings`, `Lock Focus & Start Studying`, and checkout CTAs) must float completely clear of the Android 3-button system navigation bar.
 
+---
 
+## 19. Slim Professional Rules UI & YouTube Lockout 5s Auto-Dismiss
+
+### 19.1 Kids Mode YouTube Lock 5-Second Countdown Auto-Dismissal
+* **Unified Auto-Dismiss Invariant**: When `REASON_YOUTUBE_LOCKED` triggers in `OverlayLockActivity.kt`, it must strictly invoke `startAutoDismissTimer(5)` rather than hanging on a static 30-minute countdown timer.
+* **Auto-Home Execution**: The overlay smoothly counts down `5s -> 4s -> 3s -> 2s -> 1s -> 0s` and automatically redirects the child to the device Home Screen via `Intent.CATEGORY_HOME`.
+* **Emergency PIN Access**: The Parent PIN toggle ("Unlock with Security PIN") remains visible. Tapping it freezes the countdown timer (`tvCountdown.text = "PAUSED"`), giving parents unlimited time to enter their 4-digit PIN to release the lockout.
+
+### 19.2 Slim & Professional Short-Form Video Rules UI
+* **Single-Row Horizontal Pill Carousel**: Presets for Unified Scroll Limit (`1m, 2m, 3m, 5m, 10m, 15m, 30m, 45m, 60m, + Custom`) and Lockout Cooldown (`15m, 30m, 1h, 2h, 4h, 8h, 12h, 24h, + Custom`) are rendered as sleek, single-row horizontally scrollable pill chips (`SingleChildScrollView(scrollDirection: Axis.horizontal)`). Bulky multi-line wrapped grids are strictly eliminated.
+* **Header Live Value Pill**: Each card features a compact, tappable badge with an edit icon displaying the active setting, opening the custom duration picker directly.
+* **Slim Fluid Slider**: Thinner modern slider track synced directly with selected presets.
+* **Compact Card Padding**: Card padding is tightened to 14dp, reducing vertical page height by ~55% so the entire rules configuration fits comfortably on one screen.

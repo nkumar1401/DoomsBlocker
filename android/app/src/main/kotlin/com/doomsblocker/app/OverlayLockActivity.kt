@@ -193,9 +193,8 @@ class OverlayLockActivity : Activity() {
                 } else {
                     tvMessage.text = "YouTube access remains locked until timer expires. Take a break!"
                 }
-                tvCountdownLabel.text = "COOLDOWN REMAINING"
                 pinSection.visibility = View.VISIBLE
-                startLockdownTimer()
+                startAutoDismissTimer(5)
             }
             REASON_KIDS_SHORTS_BLOCKED -> {
                 tvTitle.text = "Shorts & Reels Blocked"

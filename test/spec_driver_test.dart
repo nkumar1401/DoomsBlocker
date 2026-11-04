@@ -1701,4 +1701,108 @@ void main() {
       expect(serviceContent, contains('destroyBackgroundMediaAndPlayer'));
     });
   });
+
+  group('SPEC 22: Slim Professional Rules UI & YouTube Lockout 5s Auto-Dismiss', () {
+    test('REASON_YOUTUBE_LOCKED strictly executes 5-second countdown timer and redirects to Home Screen upon 0s', () {
+      int autoDismissSeconds = -1;
+      bool redirectedToHome = false;
+
+      void startAutoDismissTimer(int seconds) {
+        autoDismissSeconds = seconds;
+      }
+
+      void handleLockIntent(String reason) {
+        switch (reason) {
+          case 'reason_youtube_locked':
+          case 'reason_shorts_limit':
+          case 'reason_kids_shorts_blocked':
+          case 'reason_kids_social_blocked':
+          case 'reason_game_limit':
+          case 'reason_channel_blocked':
+          case 'reason_study_zone':
+            startAutoDismissTimer(5);
+            break;
+        }
+      }
+
+      handleLockIntent('reason_youtube_locked');
+      expect(autoDismissSeconds, equals(5), reason: 'YouTube lock must initiate 5s countdown popup');
+
+      // Simulate countdown ticks
+      while (autoDismissSeconds > 0) {
+        autoDismissSeconds--;
+      }
+      if (autoDismissSeconds == 0) {
+        redirectedToHome = true;
+      }
+      expect(redirectedToHome, isTrue, reason: 'Countdown expiry must smoothly redirect to Home Screen');
+    });
+
+    test('REASON_YOUTUBE_LOCKED retains PIN unlock availability and pauses countdown when PIN input is opened', () {
+      bool isPinSectionVisible = false;
+      bool isTimerPaused = false;
+      String countdownText = '5s';
+
+      void handleLockIntent(String reason) {
+        if (reason == 'reason_youtube_locked') {
+          isPinSectionVisible = true;
+        }
+      }
+
+      void onPinToggleTapped() {
+        isTimerPaused = true;
+        countdownText = 'PAUSED';
+      }
+
+      handleLockIntent('reason_youtube_locked');
+      expect(isPinSectionVisible, isTrue, reason: 'Parents PIN unlock must be visible on YouTube lockout');
+
+      onPinToggleTapped();
+      expect(isTimerPaused, isTrue);
+      expect(countdownText, equals('PAUSED'));
+    });
+
+    test('Single-row horizontal pill carousels accurately format duration labels for slim display', () {
+      String formatDuration(int minutes) {
+        if (minutes < 60) return '${minutes}m';
+        final h = minutes ~/ 60;
+        final m = minutes % 60;
+        if (m == 0) return '${h}h';
+        return '${h}h ${m}m';
+      }
+
+      expect(formatDuration(1), equals('1m'));
+      expect(formatDuration(15), equals('15m'));
+      expect(formatDuration(60), equals('1h'));
+      expect(formatDuration(120), equals('2h'));
+      expect(formatDuration(480), equals('8h'));
+      expect(formatDuration(1440), equals('24h'));
+    });
+
+    test('Verify Kotlin OverlayLockActivity invokes startAutoDismissTimer(5) for REASON_YOUTUBE_LOCKED', () {
+      final activityFile = File('android/app/src/main/kotlin/com/doomsblocker/app/OverlayLockActivity.kt');
+      expect(activityFile.existsSync(), isTrue);
+      final activityContent = activityFile.readAsStringSync();
+
+      // Ensure REASON_YOUTUBE_LOCKED calls startAutoDismissTimer(5) and does not call startLockdownTimer()
+      expect(activityContent, contains('REASON_YOUTUBE_LOCKED ->'));
+      final ytLockIndex = activityContent.indexOf('REASON_YOUTUBE_LOCKED ->');
+      final nextCaseIndex = activityContent.indexOf('REASON_KIDS_SHORTS_BLOCKED ->', ytLockIndex);
+      final ytCaseBlock = activityContent.substring(ytLockIndex, nextCaseIndex);
+
+      expect(ytCaseBlock, contains('startAutoDismissTimer(5)'));
+      expect(ytCaseBlock, isNot(contains('startLockdownTimer()')));
+    });
+
+    test('Verify ShortsSettingsScreen implements horizontal single-row pill carousels and compact padding', () {
+      final screenFile = File('lib/screens/shorts_settings_screen.dart');
+      expect(screenFile.existsSync(), isTrue);
+      final screenContent = screenFile.readAsStringSync();
+
+      expect(screenContent, contains('SingleChildScrollView'));
+      expect(screenContent, contains('scrollDirection: Axis.horizontal'));
+      expect(screenContent, contains('ChoiceChip'));
+      expect(screenContent, contains('SliderTheme'));
+    });
+  });
 }

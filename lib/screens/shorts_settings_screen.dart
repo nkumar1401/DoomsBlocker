@@ -190,11 +190,11 @@ class _ShortsSettingsScreenState extends State<ShortsSettingsScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFFEF4444)))
           : ListView(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 32 + MediaQuery.of(context).padding.bottom + 48),
+              padding: EdgeInsets.fromLTRB(16, 12, 16, 32 + MediaQuery.of(context).padding.bottom + 48),
               children: [
                 // Info Box
                 Container(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
@@ -202,23 +202,23 @@ class _ShortsSettingsScreenState extends State<ShortsSettingsScreen> {
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.info_outline, color: Color(0xFF3B82F6), size: 22),
-                      SizedBox(width: 12),
+                      Icon(Icons.info_outline, color: Color(0xFF3B82F6), size: 20),
+                      SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Track active doomscrolling across your chosen platforms into one shared pool. When your limit expires, short feeds lock together for the cooldown period.',
-                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.4),
+                          'Track active doomscrolling across chosen apps into one pool. Feeds lock together when limit expires.',
+                          style: TextStyle(color: Color(0xFF64748B), fontSize: 12, height: 1.35),
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 14),
 
-                // 1. Monitored Short-Form Platforms Card
+                // 1. Monitored Short-Form Platforms Card (Compact)
                 Container(
-                  padding: const EdgeInsets.all(18),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
@@ -232,27 +232,27 @@ class _ShortsSettingsScreenState extends State<ShortsSettingsScreen> {
                         children: [
                           const Text(
                             'Monitored Platforms',
-                            style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 15),
+                            style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF06B6D4).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(8),
+                              color: const Color(0xFF06B6D4).withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               '${_selectedApps.length} Selected',
-                              style: const TextStyle(color: Color(0xFF06B6D4), fontSize: 12, fontWeight: FontWeight.bold),
+                              style: const TextStyle(color: Color(0xFF06B6D4), fontSize: 11, fontWeight: FontWeight.bold),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       const Text(
                         'Select apps that contribute to your shared scroll-time pool:',
-                        style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                        style: TextStyle(color: Color(0xFF64748B), fontSize: 11.5),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 10),
 
                       ..._supportedPlatforms.map((p) {
                         final pkg = p['package'] as String;
@@ -263,35 +263,36 @@ class _ShortsSettingsScreenState extends State<ShortsSettingsScreen> {
                         final isChecked = _selectedApps.contains(pkg);
 
                         return Container(
-                          margin: const EdgeInsets.only(bottom: 8),
+                          margin: const EdgeInsets.only(bottom: 6),
                           decoration: BoxDecoration(
-                            color: isChecked ? color.withOpacity(0.08) : const Color(0xFFF8FAFC),
+                            color: isChecked ? color.withOpacity(0.06) : const Color(0xFFF8FAFC),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: isChecked ? color.withOpacity(0.4) : const Color(0xFF334155),
+                              color: isChecked ? color.withOpacity(0.35) : const Color(0xFFE2E8F0),
                             ),
                           ),
                           child: CheckboxListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                            dense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
                             activeColor: color,
                             checkColor: Colors.black,
                             value: isChecked,
                             onChanged: (_) => _togglePlatform(pkg),
                             secondary: Container(
-                              padding: const EdgeInsets.all(8),
+                              padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: color.withOpacity(0.15),
+                                color: color.withOpacity(0.12),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: Icon(icon, color: color, size: 20),
+                              child: Icon(icon, color: color, size: 18),
                             ),
                             title: Text(
                               name,
-                              style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w600, fontSize: 14),
+                              style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w600, fontSize: 13),
                             ),
                             subtitle: Text(
                               subtitle,
-                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5),
                             ),
                           ),
                         );
@@ -300,11 +301,11 @@ class _ShortsSettingsScreenState extends State<ShortsSettingsScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 14),
 
-                // 2. Unified Scroll Limit Card
+                // 2. Unified Scroll Limit Card (Slim Single-Row Pill Carousel)
                 Container(
-                  padding: const EdgeInsets.all(18),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
@@ -316,79 +317,22 @@ class _ShortsSettingsScreenState extends State<ShortsSettingsScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Unified Scroll Limit',
-                            style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 15),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text(
+                                'Unified Scroll Limit',
+                                style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Active scrolling allowed before lockdown.',
+                                style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                              ),
+                            ],
                           ),
                           InkWell(
                             onTap: () {
-                              _showCustomMinutesDialog(
-                                title: 'Custom Scroll Limit',
-                                description: 'Enter maximum active scrolling time across selected platforms before lockdown.',
-                                currentValue: _limitMinutes,
-                                min: 1,
-                                max: 180,
-                                onSaved: (val) => setState(() => _limitMinutes = val),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEF4444).withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.4)),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    _formatDuration(_limitMinutes),
-                                    style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  const Icon(Icons.edit, size: 12, color: Color(0xFFEF4444)),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Allowed active time scrolling across monitored apps before lockdown.',
-                        style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          ..._presetLimits.map((mins) {
-                            final selected = _limitMinutes == mins;
-                            return ChoiceChip(
-                              label: Text('${mins}m'),
-                              selected: selected,
-                              selectedColor: const Color(0xFFEF4444),
-                              backgroundColor: const Color(0xFFF8FAFC),
-                              labelStyle: TextStyle(
-                                color: selected ? Colors.white : const Color(0xFF64748B),
-                                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                                fontSize: 13,
-                              ),
-                              onSelected: (_) => setState(() => _limitMinutes = mins),
-                            );
-                          }).toList(),
-                          ActionChip(
-                            avatar: const Icon(Icons.add, size: 14, color: Color(0xFFEF4444)),
-                            label: const Text('Custom'),
-                            backgroundColor: const Color(0xFFF8FAFC),
-                            labelStyle: const TextStyle(
-                              color: Color(0xFFEF4444),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                            onPressed: () {
                               _showCustomMinutesDialog(
                                 title: 'Custom Scroll Limit',
                                 description: 'Enter maximum active scrolling time across selected apps before lockdown (e.g. 75 min).',
@@ -398,31 +342,115 @@ class _ShortsSettingsScreenState extends State<ShortsSettingsScreen> {
                                 onSaved: (val) => setState(() => _limitMinutes = val),
                               );
                             },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEF4444).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.35)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    _formatDuration(_limitMinutes),
+                                    style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                  const SizedBox(width: 3),
+                                  const Icon(Icons.edit, size: 11, color: Color(0xFFEF4444)),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 10),
-                      Slider(
-                        value: _limitMinutes.toDouble().clamp(1.0, 180.0),
-                        min: 1,
-                        max: 60,
-                        divisions: 59,
-                        activeColor: const Color(0xFFEF4444),
-                        inactiveColor: const Color(0xFF334155),
-                        label: _formatDuration(_limitMinutes),
-                        onChanged: (val) {
-                          setState(() => _limitMinutes = val.round());
-                        },
+
+                      // Single-Row Horizontal Pill Carousel
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        child: Row(
+                          children: [
+                            ..._presetLimits.map((mins) {
+                              final selected = _limitMinutes == mins;
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: ChoiceChip(
+                                  visualDensity: VisualDensity.compact,
+                                  label: Text('${mins}m'),
+                                  selected: selected,
+                                  selectedColor: const Color(0xFFEF4444),
+                                  backgroundColor: const Color(0xFFF1F5F9),
+                                  side: BorderSide(
+                                    color: selected ? const Color(0xFFEF4444) : const Color(0xFFE2E8F0),
+                                  ),
+                                  labelStyle: TextStyle(
+                                    color: selected ? Colors.white : const Color(0xFF475569),
+                                    fontWeight: selected ? FontWeight.bold : FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                  onSelected: (_) => setState(() => _limitMinutes = mins),
+                                ),
+                              );
+                            }).toList(),
+                            ActionChip(
+                              visualDensity: VisualDensity.compact,
+                              avatar: const Icon(Icons.add_rounded, size: 13, color: Color(0xFFEF4444)),
+                              label: const Text('Custom'),
+                              backgroundColor: const Color(0xFFFEF2F2),
+                              side: const BorderSide(color: Color(0xFFFECACA)),
+                              labelStyle: const TextStyle(
+                                color: Color(0xFFEF4444),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11.5,
+                              ),
+                              onPressed: () {
+                                _showCustomMinutesDialog(
+                                  title: 'Custom Scroll Limit',
+                                  description: 'Enter maximum active scrolling time across selected apps before lockdown (e.g. 75 min).',
+                                  currentValue: _limitMinutes,
+                                  min: 1,
+                                  max: 180,
+                                  onSaved: (val) => setState(() => _limitMinutes = val),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+
+                      // Slim Modern Slider
+                      SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 3.5,
+                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                          overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                        ),
+                        child: Slider(
+                          value: _limitMinutes.toDouble().clamp(1.0, 180.0),
+                          min: 1,
+                          max: 60,
+                          divisions: 59,
+                          activeColor: const Color(0xFFEF4444),
+                          inactiveColor: const Color(0xFFE2E8F0),
+                          label: _formatDuration(_limitMinutes),
+                          onChanged: (val) {
+                            setState(() => _limitMinutes = val.round());
+                          },
+                        ),
                       ),
                     ],
                   ),
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 14),
 
-                // 3. Lockout Cooldown Duration Card
+                // 3. Lockout Cooldown Duration Card (Slim Single-Row Pill Carousel)
                 Container(
-                  padding: const EdgeInsets.all(18),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
@@ -434,9 +462,19 @@ class _ShortsSettingsScreenState extends State<ShortsSettingsScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Lockout Cooldown Duration',
-                            style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 15),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text(
+                                'Lockout Cooldown Duration',
+                                style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'How long feeds remain blocked once limit is reached.',
+                                style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                              ),
+                            ],
                           ),
                           InkWell(
                             onTap: () {
@@ -451,113 +489,134 @@ class _ShortsSettingsScreenState extends State<ShortsSettingsScreen> {
                             },
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF3B82F6).withOpacity(0.2),
+                                color: const Color(0xFF3B82F6).withOpacity(0.12),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.4)),
+                                border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.35)),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
                                     _formatDuration(_lockDurationMinutes),
-                                    style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold),
+                                    style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold, fontSize: 12),
                                   ),
-                                  const SizedBox(width: 4),
-                                  const Icon(Icons.edit, size: 12, color: Color(0xFF3B82F6)),
+                                  const SizedBox(width: 3),
+                                  const Icon(Icons.edit, size: 11, color: Color(0xFF3B82F6)),
                                 ],
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'How long feeds remain blocked once the limit is reached.',
-                        style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          ..._presetLockDurations.map((mins) {
-                            final selected = _lockDurationMinutes == mins;
-                            return ChoiceChip(
-                              label: Text(_formatDuration(mins)),
-                              selected: selected,
-                              selectedColor: const Color(0xFF3B82F6),
-                              backgroundColor: const Color(0xFFF8FAFC),
-                              labelStyle: TextStyle(
-                                color: selected ? Colors.white : const Color(0xFF64748B),
-                                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                                fontSize: 13,
-                              ),
-                              onSelected: (_) => setState(() => _lockDurationMinutes = mins),
-                            );
-                          }).toList(),
-                          ActionChip(
-                            avatar: const Icon(Icons.add, size: 14, color: Color(0xFF3B82F6)),
-                            label: const Text('Custom'),
-                            backgroundColor: const Color(0xFFF8FAFC),
-                            labelStyle: const TextStyle(
-                              color: Color(0xFF3B82F6),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                            onPressed: () {
-                              _showCustomMinutesDialog(
-                                title: 'Custom Lockout Duration',
-                                description: 'Enter how long distraction remains blocked after limit is hit (e.g. 480 min for 8 hours).',
-                                currentValue: _lockDurationMinutes,
-                                min: 5,
-                                max: 1440,
-                                onSaved: (val) => setState(() => _lockDurationMinutes = val),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
                       const SizedBox(height: 10),
-                      Slider(
-                        value: _lockDurationMinutes.toDouble().clamp(5.0, 1440.0),
-                        min: 5,
-                        max: 1440,
-                        divisions: 287,
-                        activeColor: const Color(0xFF3B82F6),
-                        inactiveColor: const Color(0xFF334155),
-                        label: _formatDuration(_lockDurationMinutes),
-                        onChanged: (val) {
-                          setState(() => _lockDurationMinutes = val.round());
-                        },
+
+                      // Single-Row Horizontal Pill Carousel
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        child: Row(
+                          children: [
+                            ..._presetLockDurations.map((mins) {
+                              final selected = _lockDurationMinutes == mins;
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: ChoiceChip(
+                                  visualDensity: VisualDensity.compact,
+                                  label: Text(_formatDuration(mins)),
+                                  selected: selected,
+                                  selectedColor: const Color(0xFF3B82F6),
+                                  backgroundColor: const Color(0xFFF1F5F9),
+                                  side: BorderSide(
+                                    color: selected ? const Color(0xFF3B82F6) : const Color(0xFFE2E8F0),
+                                  ),
+                                  labelStyle: TextStyle(
+                                    color: selected ? Colors.white : const Color(0xFF475569),
+                                    fontWeight: selected ? FontWeight.bold : FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                  onSelected: (_) => setState(() => _lockDurationMinutes = mins),
+                                ),
+                              );
+                            }).toList(),
+                            ActionChip(
+                              visualDensity: VisualDensity.compact,
+                              avatar: const Icon(Icons.add_rounded, size: 13, color: Color(0xFF3B82F6)),
+                              label: const Text('Custom'),
+                              backgroundColor: const Color(0xFFEFF6FF),
+                              side: const BorderSide(color: Color(0xFFBFDBFE)),
+                              labelStyle: const TextStyle(
+                                color: Color(0xFF3B82F6),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11.5,
+                              ),
+                              onPressed: () {
+                                _showCustomMinutesDialog(
+                                  title: 'Custom Lockout Duration',
+                                  description: 'Enter how long distraction remains blocked after limit is hit (e.g. 480 min for 8 hours).',
+                                  currentValue: _lockDurationMinutes,
+                                  min: 5,
+                                  max: 1440,
+                                  onSaved: (val) => setState(() => _lockDurationMinutes = val),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+
+                      // Slim Modern Slider
+                      SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 3.5,
+                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                          overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                        ),
+                        child: Slider(
+                          value: _lockDurationMinutes.toDouble().clamp(5.0, 1440.0),
+                          min: 5,
+                          max: 1440,
+                          divisions: 287,
+                          activeColor: const Color(0xFF3B82F6),
+                          inactiveColor: const Color(0xFFE2E8F0),
+                          label: _formatDuration(_lockDurationMinutes),
+                          onChanged: (val) {
+                            setState(() => _lockDurationMinutes = val.round());
+                          },
+                        ),
                       ),
                     ],
                   ),
                 ),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 20),
 
-                ElevatedButton(
-                  onPressed: _isSaving ? null : _save,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFEF4444),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                // Save Rules CTA Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: _isSaving ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFEF4444),
+                      elevation: 1,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: _isSaving
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text(
+                            'Save Rules',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
                   ),
-                  child: _isSaving
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Text(
-                          'Save Rules',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
                 ),
               ],
-            ),
-    );
+            );
   }
 }
