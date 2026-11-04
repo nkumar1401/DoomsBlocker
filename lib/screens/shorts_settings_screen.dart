@@ -617,6 +617,7 @@ class _ShortsSettingsScreenState extends State<ShortsSettingsScreen> {
                   ),
                 ),
               ],
-            );
+            ),
+    );
   }
 }
