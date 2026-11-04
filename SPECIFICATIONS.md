@@ -349,3 +349,24 @@ ightarrow$ "Allow restricted settings" without manual searching.
 * **Lock Screen Window Insets**: In `OverlayLockActivity.kt`, `WindowCompat.setDecorFitsSystemWindows(window, false)` ensures the lock overlay smoothly expands edge-to-edge behind the transparent system bars.
 * **Content Padding**: All Flutter Dart views use `SafeArea` and `MediaQuery` padding to ensure interactive buttons and text are never clipped by the camera cutout or navigation pill.
 
+
+---
+
+## 16. Universal Browser Parity Shield & Mandatory Independence Invariants
+
+### 16.1 Study Zone & Parents Mode Mandatory Independence Invariant
+* **Checkbox Bypass Prevention**: If a user has unchecked YouTube Shorts or Instagram Reels in Adult Focus Mode settings (`prefs.isShortFormMonitored(pkg) == false`), this checkbox is **strictly overridden** whenever `prefs.isStudyZoneActive == true` OR `prefs.isKidsModeEnabled == true`.
+* **Zero Configuration**:
+  * In **Library Study Zone**: All short-form video (YouTube Shorts, Instagram, Snapchat, Moj, Josh, ShareChat) and social media are 100% blocked instantly with `REASON_STUDY_ZONE`. Educational YouTube long-form content remains 100% permitted (Invariant 2).
+  * In **Parents Mode**: All short-form video and social media are 100% blocked with `REASON_KIDS_SHORTS_BLOCKED` and `REASON_KIDS_SOCIAL_BLOCKED`.
+  * **Preservation of Parental Long-Form Rules**: Configured daily screen time limits (`shortsLimitMinutes`) for long-form educational videos, cooldown lockouts (`REASON_YOUTUBE_LOCKED`), restricted YouTube channels (`REASON_CHANNEL_BLOCKED`), and game limits (`gameLimitMinutes`) remain 100% active and enforced.
+
+### 16.2 Universal Browser Parity Web Shield
+* **Supported Browsers**: The accessibility router monitors all major Android browsers:
+  `com.android.chrome`, `com.chrome.beta`, `com.chrome.dev`, `com.sec.android.app.sbrowser`, `com.sec.android.app.sbrowser.beta`, `com.brave.browser`, `com.microsoft.emmx`, `org.mozilla.firefox`, `org.mozilla.firefox_beta`, `com.opera.browser`, `com.opera.mini.native`, `com.opera.gx`, `com.duckduckgo.mobile.android`, `com.mi.globalbrowser`, `com.vivo.browser`, `com.heytap.browser`, `com.coloros.browser`.
+* **High-Speed URL/Domain Extraction**: Query browser URL bar view IDs (`url_bar`, `location_bar_edit_text`, `toolbar`) or shallow AST text to detect active domains (`instagram.com`, `facebook.com`, `tiktok.com`, `youtube.com/shorts`, `snapchat.com`, `twitter.com`, `x.com`, `reddit.com`).
+* **3-Mode Parity Rules**:
+  1. **Library Study Zone**: Social media websites and `youtube.com/shorts` trigger `OverlayLockActivity(REASON_STUDY_ZONE)` and dismiss back.
+  2. **Parents Mode**: Social media websites trigger `REASON_KIDS_SOCIAL_BLOCKED`; `youtube.com/shorts` triggers `REASON_KIDS_SHORTS_BLOCKED`.
+  3. **Adult Focus Mode**: Time spent on web reels/shorts contributes directly to the daily short-form pool. If the user is in an active cooldown lockout or daily limit is exhausted, web reels/shorts are locked with `REASON_SHORTS_LIMIT`.
+* **Study & Research Immunity**: Legitimate educational and productivity websites (Wikipedia, Google Docs, search engines, college portals, PDFs, tech docs) are 100% exempt from blocking and run with zero interference.

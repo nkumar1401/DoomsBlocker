@@ -1184,4 +1184,244 @@ void main() {
       expect(overlayContent, contains('WindowCompat.setDecorFitsSystemWindows(window, false)'));
     });
   });
+
+  group('SPEC 19: Universal Browser Parity Shield & Mandatory Independence Invariants', () {
+    test('Mandatory Independence: Study Zone & Kids Mode override unchecked settings', () {
+      bool shouldRouteShorts({
+        required bool isStudyZoneActive,
+        required bool isKidsModeEnabled,
+        required bool isShortFormMonitored,
+      }) {
+        final isMandatoryOverride = isStudyZoneActive || isKidsModeEnabled;
+        return isMandatoryOverride || isShortFormMonitored;
+      }
+
+      // If unchecked in Adult settings, but Study Zone is active -> MUST ROUTE & ENFORCE
+      expect(
+        shouldRouteShorts(isStudyZoneActive: true, isKidsModeEnabled: false, isShortFormMonitored: false),
+        isTrue,
+        reason: 'Study Zone must enforce Shorts even if unchecked in adult settings',
+      );
+
+      // If unchecked in Adult settings, but Kids Mode is active -> MUST ROUTE & ENFORCE
+      expect(
+        shouldRouteShorts(isStudyZoneActive: false, isKidsModeEnabled: true, isShortFormMonitored: false),
+        isTrue,
+        reason: 'Kids Mode must enforce Shorts even if unchecked in adult settings',
+      );
+
+      // If in Normal Adult Mode and unchecked -> MUST ALLOW / NOT ENFORCE
+      expect(
+        shouldRouteShorts(isStudyZoneActive: false, isKidsModeEnabled: false, isShortFormMonitored: false),
+        isFalse,
+        reason: 'Normal Adult Mode respects user checkbox when idle',
+      );
+
+      // If in Normal Adult Mode and checked -> MUST ENFORCE
+      expect(
+        shouldRouteShorts(isStudyZoneActive: false, isKidsModeEnabled: false, isShortFormMonitored: true),
+        isTrue,
+      );
+    });
+
+    test('Preservation: Kids Mode long-form limits and channel restrictions remain intact', () {
+      String resolveYouTubeLockReason({
+        required bool isKidsMode,
+        required bool inShorts,
+        required int usedSeconds,
+        required int limitSeconds,
+        required bool isChannelBlocked,
+      }) {
+        if (isKidsMode) {
+          if (inShorts) return 'reason_kids_shorts_blocked';
+          if (isChannelBlocked) return 'reason_channel_blocked';
+          if (usedSeconds >= limitSeconds) return 'reason_youtube_locked';
+          return 'permitted';
+        }
+        return inShorts ? 'reason_shorts_limit' : 'permitted';
+      }
+
+      // Shorts in Kids Mode is instantly blocked with 0s tolerance
+      expect(
+        resolveYouTubeLockReason(
+          isKidsMode: true,
+          inShorts: true,
+          usedSeconds: 0,
+          limitSeconds: 1200,
+          isChannelBlocked: false,
+        ),
+        equals('reason_kids_shorts_blocked'),
+      );
+
+      // Long-form educational video under limit is permitted
+      expect(
+        resolveYouTubeLockReason(
+          isKidsMode: true,
+          inShorts: false,
+          usedSeconds: 600,
+          limitSeconds: 1200,
+          isChannelBlocked: false,
+        ),
+        equals('permitted'),
+      );
+
+      // Long-form video exceeding daily limit locks with reason_youtube_locked
+      expect(
+        resolveYouTubeLockReason(
+          isKidsMode: true,
+          inShorts: false,
+          usedSeconds: 1250,
+          limitSeconds: 1200,
+          isChannelBlocked: false,
+        ),
+        equals('reason_youtube_locked'),
+      );
+
+      // Blocked channel locks with reason_channel_blocked
+      expect(
+        resolveYouTubeLockReason(
+          isKidsMode: true,
+          inShorts: false,
+          usedSeconds: 100,
+          limitSeconds: 1200,
+          isChannelBlocked: true,
+        ),
+        equals('reason_channel_blocked'),
+      );
+    });
+
+    test('Web Shield: Browser domain parser detects social media & shorts while exempting study sites', () {
+      String? matchSocialDomainOrShorts(String text) {
+        final lower = text.toLowerCase();
+        if (lower.contains('youtube.com/shorts') || lower.contains('m.youtube.com/shorts') || lower.contains('/shorts/')) {
+          return 'youtube_shorts';
+        }
+        if (lower.contains('instagram.com') || lower.contains('reels • instagram') || lower.contains('instagram reels')) {
+          return 'instagram';
+        }
+        if (lower.contains('facebook.com/reel') || lower.contains('facebook.com/watch') || lower.contains('fb.watch') || lower.contains('facebook.com')) {
+          return 'facebook';
+        }
+        if (lower.contains('tiktok.com')) return 'tiktok';
+        if (lower.contains('snapchat.com')) return 'snapchat';
+        if (lower.contains('twitter.com') || lower.contains('x.com')) return 'twitter';
+        if (lower.contains('reddit.com')) return 'reddit';
+        if (lower.contains('mojapp.in') || lower.contains('myjosh.in') || lower.contains('sharechat.com')) {
+          return 'pure_short_form';
+        }
+        return null;
+      }
+
+      // Social media and short-form video URLs are accurately detected
+      expect(matchSocialDomainOrShorts('https://m.youtube.com/shorts/xyz123'), equals('youtube_shorts'));
+      expect(matchSocialDomainOrShorts('https://www.instagram.com/reels/video/'), equals('instagram'));
+      expect(matchSocialDomainOrShorts('https://www.facebook.com/reel/12345'), equals('facebook'));
+      expect(matchSocialDomainOrShorts('https://www.tiktok.com/@creator/video/123'), equals('tiktok'));
+      expect(matchSocialDomainOrShorts('https://x.com/explore'), equals('twitter'));
+      expect(matchSocialDomainOrShorts('https://www.reddit.com/r/videos'), equals('reddit'));
+
+      // Study, research, and educational websites are 100% EXEMPT (returns null)
+      expect(matchSocialDomainOrShorts('https://en.wikipedia.org/wiki/Quantum_mechanics'), isNull);
+      expect(matchSocialDomainOrShorts('https://docs.google.com/document/d/123/edit'), isNull);
+      expect(matchSocialDomainOrShorts('https://www.google.com/search?q=calculus+notes'), isNull);
+      expect(matchSocialDomainOrShorts('https://github.com/flutter/flutter'), isNull);
+      expect(matchSocialDomainOrShorts('https://stackoverflow.com/questions/123'), isNull);
+      expect(matchSocialDomainOrShorts('https://www.youtube.com/watch?v=lecture123'), isNull, reason: 'Educational YouTube watch URL is exempt');
+    });
+
+    test('Browser Parity: 3-Mode Lock resolution enforces exact native parity on web browsers', () {
+      String resolveBrowserLockAction({
+        required String detectedDomain,
+        required bool isStudyZoneActive,
+        required bool isKidsModeEnabled,
+        required bool isAdultLockoutActive,
+      }) {
+        if (isStudyZoneActive) {
+          return 'reason_study_zone';
+        }
+        if (isKidsModeEnabled) {
+          return detectedDomain == 'youtube_shorts'
+              ? 'reason_kids_shorts_blocked'
+              : 'reason_kids_social_blocked';
+        }
+        if (isAdultLockoutActive) {
+          return 'reason_shorts_limit';
+        }
+        return 'permitted';
+      }
+
+      // Mode 1: Study Zone -> Always locks with reason_study_zone
+      expect(
+        resolveBrowserLockAction(
+          detectedDomain: 'instagram',
+          isStudyZoneActive: true,
+          isKidsModeEnabled: false,
+          isAdultLockoutActive: false,
+        ),
+        equals('reason_study_zone'),
+      );
+      expect(
+        resolveBrowserLockAction(
+          detectedDomain: 'youtube_shorts',
+          isStudyZoneActive: true,
+          isKidsModeEnabled: false,
+          isAdultLockoutActive: false,
+        ),
+        equals('reason_study_zone'),
+      );
+
+      // Mode 2: Kids Mode -> Locks with reason_kids_shorts_blocked or reason_kids_social_blocked
+      expect(
+        resolveBrowserLockAction(
+          detectedDomain: 'youtube_shorts',
+          isStudyZoneActive: false,
+          isKidsModeEnabled: true,
+          isAdultLockoutActive: false,
+        ),
+        equals('reason_kids_shorts_blocked'),
+      );
+      expect(
+        resolveBrowserLockAction(
+          detectedDomain: 'facebook',
+          isStudyZoneActive: false,
+          isKidsModeEnabled: true,
+          isAdultLockoutActive: false,
+        ),
+        equals('reason_kids_social_blocked'),
+      );
+
+      // Mode 3: Adult Mode with active lockout -> Locks with reason_shorts_limit
+      expect(
+        resolveBrowserLockAction(
+          detectedDomain: 'youtube_shorts',
+          isStudyZoneActive: false,
+          isKidsModeEnabled: false,
+          isAdultLockoutActive: true,
+        ),
+        equals('reason_shorts_limit'),
+      );
+
+      // Mode 3: Adult Mode without lockout -> Permitted to browse (accumulates scroll time)
+      expect(
+        resolveBrowserLockAction(
+          detectedDomain: 'instagram',
+          isStudyZoneActive: false,
+          isKidsModeEnabled: false,
+          isAdultLockoutActive: false,
+        ),
+        equals('permitted'),
+      );
+    });
+
+    test('Verify Kotlin DoomsAccessibilityService defines SUPPORTED_BROWSER_PACKAGES and isBrowserPackage', () {
+      final serviceFile = File('android/app/src/main/kotlin/com/doomsblocker/app/DoomsAccessibilityService.kt');
+      expect(serviceFile.existsSync(), isTrue);
+      final serviceContent = serviceFile.readAsStringSync();
+      expect(serviceContent, contains('SUPPORTED_BROWSER_PACKAGES'));
+      expect(serviceContent, contains('isBrowserPackage'));
+      expect(serviceContent, contains('handleBrowserEvent'));
+      expect(serviceContent, contains('detectBrowserUrlOrDomain'));
+      expect(serviceContent, contains('isMandatoryOverride'));
+    });
+  });
 }

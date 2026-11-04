@@ -52,6 +52,33 @@ class DoomsAccessibilityService : AccessibilityService() {
             "com.google.android.apps.authenticator2", // Google Authenticator
             "com.azure.authenticator"                 // Microsoft Authenticator
         )
+
+        val SUPPORTED_BROWSER_PACKAGES = setOf(
+            "com.android.chrome",
+            "com.chrome.beta",
+            "com.chrome.dev",
+            "com.chrome.canary",
+            "com.sec.android.app.sbrowser",
+            "com.sec.android.app.sbrowser.beta",
+            "com.brave.browser",
+            "com.microsoft.emmx",
+            "org.mozilla.firefox",
+            "org.mozilla.firefox_beta",
+            "com.opera.browser",
+            "com.opera.mini.native",
+            "com.opera.gx",
+            "com.duckduckgo.mobile.android",
+            "com.mi.globalbrowser",
+            "com.vivo.browser",
+            "com.heytap.browser",
+            "com.coloros.browser"
+        )
+
+        fun isBrowserPackage(pkg: String): Boolean {
+            if (SUPPORTED_BROWSER_PACKAGES.contains(pkg)) return true
+            val lower = pkg.lowercase(Locale.US)
+            return lower.contains("browser") || lower.contains(".chrome")
+        }
     }
 
     private fun isPaymentOrBankingApp(pkgName: String): Boolean {
@@ -74,6 +101,8 @@ class DoomsAccessibilityService : AccessibilityService() {
     private var isInsideReels = false
     private var isInsideSpotlight = false
     private var isInsidePureShortForm = false
+    private var isInsideWebShorts = false
+    private var isInsideWebReels = false
     private var lastActiveTimeMillis = 0L
     private var lastLockActionTimeMillis = 0L
 
@@ -346,14 +375,18 @@ class DoomsAccessibilityService : AccessibilityService() {
             return
         }
 
-        if (pkgName == YOUTUBE_PACKAGE && prefs.isShortFormMonitored(YOUTUBE_PACKAGE)) {
+        val isMandatoryOverride = prefs.isStudyZoneActive || prefs.isKidsModeEnabled
+
+        if (pkgName == YOUTUBE_PACKAGE && (isMandatoryOverride || prefs.isShortFormMonitored(YOUTUBE_PACKAGE))) {
             handleYouTubeEvent(event)
-        } else if (pkgName == INSTAGRAM_PACKAGE && prefs.isShortFormMonitored(INSTAGRAM_PACKAGE)) {
+        } else if (pkgName == INSTAGRAM_PACKAGE && (isMandatoryOverride || prefs.isShortFormMonitored(INSTAGRAM_PACKAGE))) {
             handleInstagramEvent(event)
-        } else if (pkgName == SNAPCHAT_PACKAGE && prefs.isShortFormMonitored(SNAPCHAT_PACKAGE)) {
+        } else if (pkgName == SNAPCHAT_PACKAGE && (isMandatoryOverride || prefs.isShortFormMonitored(SNAPCHAT_PACKAGE))) {
             handleSnapchatEvent(event)
-        } else if (isPureShortFormPackage(pkgName) && prefs.isShortFormMonitored(pkgName)) {
+        } else if (isPureShortFormPackage(pkgName) && (isMandatoryOverride || prefs.isShortFormMonitored(pkgName))) {
             handlePureShortFormEvent(event, pkgName)
+        } else if (isBrowserPackage(pkgName)) {
+            handleBrowserEvent(event, pkgName)
         } else if (prefs.isStudyZoneActive && isSocialOrDistractionApp(pkgName)) {
             handleStudyZoneDistractionEvent(pkgName)
         } else if (prefs.restrictedApps.contains(pkgName)) {
@@ -363,6 +396,8 @@ class DoomsAccessibilityService : AccessibilityService() {
             isInsideReels = false
             isInsideSpotlight = false
             isInsidePureShortForm = false
+            isInsideWebShorts = false
+            isInsideWebReels = false
         }
     }
 
@@ -1063,6 +1098,8 @@ class DoomsAccessibilityService : AccessibilityService() {
             isInsideReels = false
             isInsideSpotlight = false
             isInsidePureShortForm = false
+            isInsideWebShorts = false
+            isInsideWebReels = false
         }
 
         // 1. Screen Time Tracking
@@ -1087,7 +1124,9 @@ class DoomsAccessibilityService : AccessibilityService() {
             val isShortFormActive = (activePackage == YOUTUBE_PACKAGE && isInsideShorts) ||
                                     (activePackage == INSTAGRAM_PACKAGE && isInsideReels) ||
                                     (activePackage == SNAPCHAT_PACKAGE && isInsideSpotlight) ||
-                                    (isInsidePureShortForm)
+                                    (isInsidePureShortForm) ||
+                                    (isInsideWebShorts) ||
+                                    (isInsideWebReels)
 
             if (isShortFormActive) {
                 prefs.addShortsUsedSeconds(deltaSeconds)
@@ -1200,5 +1239,172 @@ class DoomsAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacks(tickerRunnable)
+    }
+
+    // =========================================================================
+    // UNIVERSAL BROWSER PARITY WEB SHIELD
+    // =========================================================================
+
+    private fun handleBrowserEvent(event: AccessibilityEvent, browserPkg: String) {
+        val rootNode = rootInActiveWindow ?: return
+        val detected: String?
+        try {
+            detected = detectBrowserUrlOrDomain(rootNode, browserPkg)
+        } finally {
+            rootNode.recycle()
+        }
+
+        if (detected == null) {
+            isInsideWebShorts = false
+            isInsideWebReels = false
+            return
+        }
+
+        // Mode 1: Library Study Zone Active -> 100% immediate lockout
+        if (prefs.isStudyZoneActive) {
+            isInsideWebShorts = false
+            isInsideWebReels = false
+            if (canTriggerLockAction()) {
+                Log.w(TAG, "Study Zone Active: Web social/shorts ($detected) in $browserPkg blocked! Showing lock overlay...")
+                destroyBackgroundMediaAndPlayer(browserPkg)
+                dismissPictureInPictureIfPresent()
+                OverlayLockActivity.start(
+                    this,
+                    OverlayLockActivity.REASON_STUDY_ZONE,
+                    blockedItem = prefs.studyZoneName,
+                    targetPackage = browserPkg
+                )
+            }
+            return
+        }
+
+        // Mode 2: Kids Mode Active -> 100% immediate lockout with parent PIN
+        if (prefs.isKidsModeEnabled) {
+            isInsideWebShorts = false
+            isInsideWebReels = false
+            if (canTriggerLockAction()) {
+                val reason = if (detected == "youtube_shorts") {
+                    OverlayLockActivity.REASON_KIDS_SHORTS_BLOCKED
+                } else {
+                    OverlayLockActivity.REASON_KIDS_SOCIAL_BLOCKED
+                }
+                Log.w(TAG, "Kids Mode Active: Web social/shorts ($detected) in $browserPkg blocked! Showing lock overlay...")
+                destroyBackgroundMediaAndPlayer(browserPkg)
+                dismissPictureInPictureIfPresent()
+                OverlayLockActivity.start(
+                    this,
+                    reason,
+                    blockedItem = if (detected == "youtube_shorts") "YouTube Shorts" else "Social Media (Web)",
+                    targetPackage = browserPkg
+                )
+            }
+            return
+        }
+
+        // Mode 3: Adult Focus Mode
+        if (detected == "youtube_shorts") {
+            isInsideWebShorts = true
+            isInsideWebReels = false
+            if (prefs.isYouTubeLocked) {
+                if (canTriggerLockAction()) {
+                    Log.w(TAG, "Adult Mode: Web YouTube Shorts opened during active lockout! Ejecting...")
+                    destroyBackgroundMediaAndPlayer(browserPkg)
+                    dismissPictureInPictureIfPresent()
+                    OverlayLockActivity.start(this, OverlayLockActivity.REASON_SHORTS_LIMIT, targetPackage = browserPkg)
+                }
+            }
+        } else {
+            // Instagram, Facebook, TikTok, etc.
+            isInsideWebShorts = false
+            isInsideWebReels = true
+            if (prefs.isYouTubeLocked) { // Unified cooldown lockout
+                if (canTriggerLockAction()) {
+                    Log.w(TAG, "Adult Mode: Web Reels ($detected) opened during active lockout! Ejecting...")
+                    destroyBackgroundMediaAndPlayer(browserPkg)
+                    dismissPictureInPictureIfPresent()
+                    OverlayLockActivity.start(this, OverlayLockActivity.REASON_SHORTS_LIMIT, targetPackage = browserPkg)
+                }
+            }
+        }
+    }
+
+    private fun detectBrowserUrlOrDomain(rootNode: AccessibilityNodeInfo, browserPkg: String): String? {
+        val urlBarIds = listOf(
+            "$browserPkg:id/url_bar",
+            "$browserPkg:id/location_bar_edit_text",
+            "$browserPkg:id/toolbar",
+            "$browserPkg:id/search_box",
+            "$browserPkg:id/address_bar",
+            "$browserPkg:id/mozac_browser_toolbar_url_view"
+        )
+
+        for (id in urlBarIds) {
+            val nodes = rootNode.findAccessibilityNodeInfosByViewId(id)
+            if (!nodes.isNullOrEmpty()) {
+                for (node in nodes) {
+                    val text = node.text?.toString() ?: node.contentDescription?.toString()
+                    node.recycle()
+                    if (!text.isNullOrBlank()) {
+                        val matched = matchSocialDomainOrShorts(text)
+                        if (matched != null) return matched
+                    }
+                }
+            }
+        }
+
+        return scanNodeForSocialOrShorts(rootNode, 0)
+    }
+
+    private fun matchSocialDomainOrShorts(text: String): String? {
+        val lower = text.lowercase(Locale.US)
+        if (lower.contains("youtube.com/shorts") || lower.contains("m.youtube.com/shorts") || lower.contains("/shorts/")) {
+            return "youtube_shorts"
+        }
+        if (lower.contains("instagram.com") || lower.contains("reels • instagram") || lower.contains("instagram reels")) {
+            return "instagram"
+        }
+        if (lower.contains("facebook.com/reel") || lower.contains("facebook.com/watch") || lower.contains("fb.watch") || lower.contains("facebook.com")) {
+            return "facebook"
+        }
+        if (lower.contains("tiktok.com")) {
+            return "tiktok"
+        }
+        if (lower.contains("snapchat.com")) {
+            return "snapchat"
+        }
+        if (lower.contains("twitter.com") || lower.contains("x.com")) {
+            return "twitter"
+        }
+        if (lower.contains("reddit.com")) {
+            return "reddit"
+        }
+        if (lower.contains("mojapp.in") || lower.contains("myjosh.in") || lower.contains("sharechat.com")) {
+            return "pure_short_form"
+        }
+        return null
+    }
+
+    private fun scanNodeForSocialOrShorts(node: AccessibilityNodeInfo?, depth: Int): String? {
+        if (node == null || depth > 12) return null
+
+        val resId = node.viewIdResourceName?.lowercase(Locale.US) ?: ""
+        val text = node.text?.toString()?.lowercase(Locale.US) ?: ""
+        val desc = node.contentDescription?.toString()?.lowercase(Locale.US) ?: ""
+
+        val combined = "$resId $text $desc"
+        val matched = matchSocialDomainOrShorts(combined)
+        if (matched != null) return matched
+
+        val childCount = node.childCount
+        val limit = if (childCount > 15) 15 else childCount
+        for (i in 0 until limit) {
+            val child = node.getChild(i)
+            if (child != null) {
+                val found = scanNodeForSocialOrShorts(child, depth + 1)
+                child.recycle()
+                if (found != null) return found
+            }
+        }
+        return null
     }
 }
