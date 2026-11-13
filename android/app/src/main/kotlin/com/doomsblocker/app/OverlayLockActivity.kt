@@ -83,6 +83,7 @@ class OverlayLockActivity : Activity() {
     private lateinit var btnCloseOverlay: TextView
     private var failedPinAttempts = 0
     private var targetPackage: String? = null
+    private var currentReason: String = REASON_SHORTS_LIMIT
     private var activityCreationTimeMillis = 0L
 
     private val dismissReceiver = object : BroadcastReceiver() {
@@ -145,11 +146,18 @@ class OverlayLockActivity : Activity() {
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
-        intent?.let { handleIntent(it) }
+        intent?.let {
+            setIntent(it)
+            activityCreationTimeMillis = System.currentTimeMillis()
+            LockOverlayManager.dismiss(this)
+            silenceMediaPlayback()
+            handleIntent(it)
+        }
     }
 
     private fun handleIntent(intent: Intent) {
         val reason = intent.getStringExtra(EXTRA_REASON) ?: REASON_SHORTS_LIMIT
+        currentReason = reason
         val blockedItem = intent.getStringExtra(EXTRA_BLOCKED_ITEM) ?: ""
         targetPackage = intent.getStringExtra(EXTRA_PACKAGE_NAME)
 
@@ -302,8 +310,12 @@ class OverlayLockActivity : Activity() {
             val entered = etPin.text.toString().trim()
             if (prefs.isPinSet && entered == prefs.parentPin) {
                 failedPinAttempts = 0
-                prefs.unlockYouTubeEmergency()
-                prefs.resetGamesUsageEmergency()
+                if (currentReason == REASON_YOUTUBE_LOCKED || currentReason == REASON_SHORTS_LIMIT) {
+                    prefs.unlockYouTubeEmergency()
+                }
+                if (currentReason == REASON_GAME_LIMIT) {
+                    prefs.resetGamesUsageEmergency()
+                }
                 countDownTimer?.cancel()
 
                 val pkgToLaunch = targetPackage

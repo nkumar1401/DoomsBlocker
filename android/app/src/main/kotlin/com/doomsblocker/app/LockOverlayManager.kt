@@ -1,8 +1,12 @@
 package com.doomsblocker.app
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.os.Build
 import android.os.CountDownTimer
 import android.os.Handler
@@ -10,6 +14,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
@@ -158,12 +163,7 @@ object LockOverlayManager {
                 }
 
                 val onGoHome = View.OnClickListener {
-                    dismiss(context)
-                    val homeIntent = Intent(Intent.ACTION_MAIN).apply {
-                        addCategory(Intent.CATEGORY_HOME)
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    context.startActivity(homeIntent)
+                    goHomeAndCleanup(context, targetPackage)
                 }
 
                 btnGoHome?.setOnClickListener(onGoHome)
@@ -172,6 +172,7 @@ object LockOverlayManager {
                 tvEmergencyPinToggle?.setOnClickListener {
                     // Tapping PIN toggle pauses 5-second countdown so user can type!
                     countDownTimer?.cancel()
+                    view.findViewById<TextView>(R.id.tvCountdownLabel)?.text = "PIN UNLOCK ACTIVE"
                     tvCountdown?.text = "PAUSED"
                     pinInputContainer?.visibility = View.VISIBLE
                     etPin?.requestFocus()
@@ -180,16 +181,24 @@ object LockOverlayManager {
                 btnUnlockPin?.setOnClickListener {
                     val entered = etPin?.text?.toString()?.trim() ?: ""
                     if (prefs.isPinSet && entered == prefs.parentPin) {
-                        prefs.unlockYouTubeEmergency()
-                        prefs.resetGamesUsageEmergency()
+                        if (reason == OverlayLockActivity.REASON_YOUTUBE_LOCKED || reason == OverlayLockActivity.REASON_SHORTS_LIMIT) {
+                            prefs.unlockYouTubeEmergency()
+                        }
+                        if (reason == OverlayLockActivity.REASON_GAME_LIMIT) {
+                            prefs.resetGamesUsageEmergency()
+                        }
                         dismiss(context)
                         val pkgToLaunch = targetPackage
                         if (!pkgToLaunch.isNullOrEmpty()) {
-                            val resumeIntent = context.packageManager.getLaunchIntentForPackage(pkgToLaunch)?.apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                            }
-                            if (resumeIntent != null) {
-                                context.startActivity(resumeIntent)
+                            try {
+                                val resumeIntent = context.packageManager.getLaunchIntentForPackage(pkgToLaunch)?.apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                }
+                                if (resumeIntent != null) {
+                                    context.startActivity(resumeIntent)
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error reopening $pkgToLaunch: ${e.message}")
                             }
                         }
                     } else {
@@ -206,12 +215,7 @@ object LockOverlayManager {
 
                     override fun onFinish() {
                         tvCountdown?.text = "0s"
-                        dismiss(context)
-                        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
-                            addCategory(Intent.CATEGORY_HOME)
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        }
-                        context.startActivity(homeIntent)
+                        goHomeAndCleanup(context, targetPackage)
                     }
                 }.start()
 
@@ -221,6 +225,57 @@ object LockOverlayManager {
             } catch (e: Exception) {
                 Log.e(TAG, "Error displaying WindowManager overlay: ${e.message}")
             }
+        }
+    }
+
+    private fun goHomeAndCleanup(context: Context, targetPackage: String?) {
+        try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            if (audioManager != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                        .setAudioAttributes(
+                            AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build()
+                        )
+                        .build()
+                    audioManager.requestAudioFocus(focusRequest)
+                } else {
+                    @Suppress("DEPRECATION")
+                    audioManager.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                }
+                audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PAUSE))
+                audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PAUSE))
+                audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_STOP))
+                audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_STOP))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error silencing media on overlay dismiss: ${e.message}")
+        }
+
+        try {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            if (!targetPackage.isNullOrEmpty()) {
+                am?.killBackgroundProcesses(targetPackage)
+            } else {
+                am?.killBackgroundProcesses("com.google.android.youtube")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error killing background processes on overlay dismiss: ${e.message}")
+        }
+
+        dismiss(context)
+
+        try {
+            val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+            }
+            context.startActivity(homeIntent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error returning to home from overlay: ${e.message}")
         }
     }
 

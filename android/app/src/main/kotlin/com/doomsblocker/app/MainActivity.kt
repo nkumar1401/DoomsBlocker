@@ -56,6 +56,7 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getDashboardData" -> {
+                    GameDetector.syncAllInstalledGames(this, prefs)
                     val now = System.currentTimeMillis()
                     val remainingLockSec = if (prefs.isYouTubeLocked) {
                         ((prefs.youtubeLockUntilTimestamp - now) / 1000).toInt().coerceAtLeast(0)
@@ -71,6 +72,7 @@ class MainActivity : FlutterActivity() {
                         "isKidsModeEnabled" to prefs.isKidsModeEnabled,
                         "enabledShortFormApps" to prefs.enabledShortFormApps.toList(),
                         "gameLimitMinutes" to prefs.gameLimitMinutes,
+                        "autoRestrictGames" to prefs.isAutoRestrictGamesEnabled,
                         "restrictedAppsCount" to prefs.restrictedApps.size,
                         "blockedChannelsCount" to prefs.blockedChannels.size,
                         "isStudyZoneActive" to prefs.isStudyZoneActive,
@@ -194,6 +196,15 @@ class MainActivity : FlutterActivity() {
                     result.success(true)
                 }
 
+                "setAutoRestrictGames" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: true
+                    prefs.isAutoRestrictGamesEnabled = enabled
+                    if (enabled) {
+                        GameDetector.syncAllInstalledGames(this, prefs)
+                    }
+                    result.success(true)
+                }
+
                 "getInstalledApps" -> {
                     val appsList = getInstalledLaunchableApps()
                     result.success(appsList)
@@ -202,13 +213,7 @@ class MainActivity : FlutterActivity() {
                 "toggleRestrictedApp" -> {
                     val pkg = call.argument<String>("packageName")
                     if (pkg != null) {
-                        val current = prefs.restrictedApps.toMutableSet()
-                        if (current.contains(pkg)) {
-                            current.remove(pkg)
-                        } else {
-                            current.add(pkg)
-                        }
-                        prefs.restrictedApps = current
+                        prefs.toggleRestrictedApp(pkg)
                         result.success(true)
                     } else {
                         result.error("INVALID_ARGS", "Package name missing", null)
@@ -440,50 +445,27 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun getInstalledLaunchableApps(): List<Map<String, Any>> {
+        GameDetector.syncAllInstalledGames(this, prefs)
+
         val pm = packageManager
         val intent = Intent(Intent.ACTION_MAIN, null).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
         }
         val resolveInfos = pm.queryIntentActivities(intent, 0)
         val restricted = prefs.restrictedApps
+        val exempted = prefs.exemptedGames
 
-        val systemBlacklist = setOf(
-            "com.android.settings",
-            "com.google.android.settings",
-            "com.android.systemui",
-            "com.android.vending",
-            "com.google.android.googlequicksearchbox",
-            "com.google.android.packageinstaller",
-            "com.android.packageinstaller",
-            "com.google.android.dialer",
-            "com.android.dialer",
-            "com.android.phone",
-            "com.google.android.deskclock",
-            "com.android.deskclock",
-            "com.google.android.calculator",
-            "com.android.calculator2",
-            "com.google.android.contacts",
-            "com.android.contacts",
-            "com.google.android.apps.messaging",
-            "com.android.mms",
-            "com.android.camera",
-            "com.google.android.GoogleCamera"
-        )
-
+        val seenPackages = mutableSetOf<String>()
         val list = mutableListOf<Map<String, Any>>()
         for (info in resolveInfos) {
-            val pkg = info.activityInfo.packageName
-            // Skip self and basic system framework
-            if (pkg == packageName) continue
-            if (systemBlacklist.contains(pkg) || pkg.startsWith("com.android.internal")) continue
+            val pkg = info.activityInfo.packageName ?: continue
+            // Skip self, duplicates, and basic system framework
+            if (pkg == packageName || !seenPackages.add(pkg)) continue
+            if (GameDetector.isSystemIgnoredPackage(pkg)) continue
 
             val appInfo = info.activityInfo.applicationInfo
             val isSystem = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-            val isGame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                appInfo.category == ApplicationInfo.CATEGORY_GAME || (appInfo.flags and ApplicationInfo.FLAG_IS_GAME) != 0
-            } else {
-                (appInfo.flags and ApplicationInfo.FLAG_IS_GAME) != 0
-            }
+            val isGame = GameDetector.isPackageGame(this, pkg, null, prefs)
 
             // Exclude system utilities unless it's a game or already restricted by user
             if (isSystem && !isGame && !restricted.contains(pkg)) {
@@ -493,6 +475,7 @@ class MainActivity : FlutterActivity() {
             val label = info.loadLabel(pm).toString()
             val usedSec = prefs.getAppUsageSeconds(pkg)
             val isRestricted = restricted.contains(pkg)
+            val isExempted = exempted.contains(pkg)
 
             list.add(
                 mapOf(
@@ -500,7 +483,8 @@ class MainActivity : FlutterActivity() {
                     "packageName" to pkg,
                     "isRestricted" to isRestricted,
                     "usedMinutes" to (usedSec / 60),
-                    "isGame" to isGame
+                    "isGame" to isGame,
+                    "isExempted" to isExempted
                 )
             )
         }

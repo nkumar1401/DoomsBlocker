@@ -7,15 +7,19 @@ import android.app.PendingIntent
 import android.app.Service
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import java.util.Locale
 
 class AppMonitorForegroundService : Service() {
@@ -24,6 +28,10 @@ class AppMonitorForegroundService : Service() {
         private const val TAG = "AppMonitorService"
         private const val CHANNEL_ID = "doomsblocker_monitor_channel"
         private const val NOTIFICATION_ID = 1001
+
+        @Volatile
+        var isRunning: Boolean = false
+            private set
 
         fun start(context: Context) {
             val intent = Intent(context, AppMonitorForegroundService::class.java)
@@ -47,6 +55,50 @@ class AppMonitorForegroundService : Service() {
     private var lastNotifTimeSec = -1
     private var lastNotifLocked = false
     private var lastNotifStudyZone = false
+    private var lastKnownForegroundPkg: String? = null
+    private var lastLockActionTimeMillis = 0L
+
+    private fun canTriggerLockAction(): Boolean {
+        val now = System.currentTimeMillis()
+        if (now - lastLockActionTimeMillis < 2500L) {
+            return false
+        }
+        lastLockActionTimeMillis = now
+        return true
+    }
+
+    private fun checkAndAutoRestrictInstalledPackage(installedPkg: String) {
+        if (!prefs.isAutoRestrictGamesEnabled) return
+        if (prefs.exemptedGames.contains(installedPkg) || prefs.restrictedApps.contains(installedPkg)) return
+        if (GameDetector.isPackageGame(applicationContext, installedPkg, null, prefs)) {
+            val added = prefs.autoRestrictGameIfEligible(installedPkg, true)
+            if (added) {
+                Log.i(TAG, "Auto-restricted newly installed game: $installedPkg")
+            }
+        }
+    }
+
+    private val packageInstallReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val action = intent?.action ?: return
+            if (action == Intent.ACTION_PACKAGE_ADDED || action == Intent.ACTION_PACKAGE_REPLACED) {
+                val installedPkg = intent.data?.schemeSpecificPart ?: return
+                if (installedPkg == packageName) return
+                GameDetector.invalidateCache(installedPkg)
+                prefs.lastPlayStoreInstallTimestamp = System.currentTimeMillis()
+                checkAndAutoRestrictInstalledPackage(installedPkg)
+
+                // Re-check asynchronously in case Play Store's setApplicationCategoryHint() arrives after install commit
+                val recheckDelaysMs = longArrayOf(3_000L, 10_000L, 30_000L)
+                for (delayMs in recheckDelaysMs) {
+                    handler.postDelayed({
+                        GameDetector.invalidateCache(installedPkg)
+                        checkAndAutoRestrictInstalledPackage(installedPkg)
+                    }, delayMs)
+                }
+            }
+        }
+    }
 
     private val monitorRunnable = object : Runnable {
         override fun run() {
@@ -58,10 +110,22 @@ class AppMonitorForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         prefs = AppPreferences(applicationContext)
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
+        GameDetector.syncAllInstalledGames(this, prefs)
+        try {
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_PACKAGE_ADDED)
+                addAction(Intent.ACTION_PACKAGE_REPLACED)
+                addDataScheme("package")
+            }
+            ContextCompat.registerReceiver(this, packageInstallReceiver, filter, ContextCompat.RECEIVER_EXPORTED)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error registering packageInstallReceiver: ${e.message}")
+        }
         lastCheckTime = System.currentTimeMillis()
         handler.post(monitorRunnable)
     }
@@ -100,7 +164,15 @@ class AppMonitorForegroundService : Service() {
         val deltaSeconds = ((now - lastCheckTime) / 1000).toInt().coerceIn(0, 5)
         lastCheckTime = now
 
+        val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        if (powerManager != null && !powerManager.isInteractive) {
+            return
+        }
+
         val fgPackage = getForegroundPackage(now) ?: return
+        if (fgPackage == packageName || GameDetector.isPaymentOrBankingApp(fgPackage)) {
+            return
+        }
 
         // 1. YouTube lock check
         if (fgPackage == "com.google.android.youtube") {
@@ -111,9 +183,11 @@ class AppMonitorForegroundService : Service() {
             }
             if (prefs.isYouTubeLocked) {
                 if (prefs.isKidsModeEnabled) {
-                    Log.w(TAG, "Kids Mode active: YouTube opened during active lock window! Ejecting...")
-                    ejectToHome()
-                    OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED)
+                    if (canTriggerLockAction()) {
+                        Log.w(TAG, "Kids Mode active: YouTube opened during active lock window! Ejecting...")
+                        ejectToHome()
+                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED)
+                    }
                     return
                 }
                 // In Adult Mode, normal YouTube app & longform video are permitted; Shorts is strictly blocked by AccessibilityService!
@@ -122,38 +196,47 @@ class AppMonitorForegroundService : Service() {
 
         // 1.1 Kids Mode Social Media 24/7 Block
         if (prefs.isKidsModeEnabled && isSocialOrDistractionApp(fgPackage)) {
-            Log.w(TAG, "Kids Mode active: Social app $fgPackage is blocked 24/7!")
-            ejectToHome()
-            OverlayLockActivity.start(
-                this,
-                OverlayLockActivity.REASON_KIDS_SOCIAL_BLOCKED,
-                targetPackage = fgPackage
-            )
+            if (canTriggerLockAction()) {
+                Log.w(TAG, "Kids Mode active: Social app $fgPackage is blocked 24/7!")
+                ejectToHome(fgPackage)
+                OverlayLockActivity.start(
+                    this,
+                    OverlayLockActivity.REASON_KIDS_SOCIAL_BLOCKED,
+                    targetPackage = fgPackage
+                )
+            }
             return
         }
 
         // 2. Study Zone distraction apps check
         if (prefs.isStudyZoneActive && isSocialOrDistractionApp(fgPackage)) {
-            Log.w(TAG, "Study Zone Active: Distraction app $fgPackage blocked during study hours!")
-            OverlayLockActivity.start(
-                this,
-                OverlayLockActivity.REASON_STUDY_ZONE,
-                prefs.studyZoneName,
-                fgPackage
-            )
-            return
-        }
-
-        // 3. Restricted apps & games check
-        if (prefs.restrictedApps.contains(fgPackage)) {
-            if (prefs.isStudyZoneActive) {
-                Log.w(TAG, "Study Zone Active: Restricted game $fgPackage blocked during study hours!")
+            if (canTriggerLockAction()) {
+                Log.w(TAG, "Study Zone Active: Distraction app $fgPackage blocked during study hours!")
+                ejectToHome(fgPackage)
                 OverlayLockActivity.start(
                     this,
                     OverlayLockActivity.REASON_STUDY_ZONE,
                     prefs.studyZoneName,
                     fgPackage
                 )
+            }
+            return
+        }
+
+        // 3. Restricted apps & games check (strictly scoped to Kids Mode or Study Zone)
+        val isGameEnforcementActive = prefs.isKidsModeEnabled || prefs.isStudyZoneActive
+        if (isGameEnforcementActive && GameDetector.syncAndCheckRestricted(this, prefs, fgPackage, null)) {
+            if (prefs.isStudyZoneActive) {
+                if (canTriggerLockAction()) {
+                    Log.w(TAG, "Study Zone Active: Restricted game $fgPackage blocked during study hours!")
+                    ejectToHome(fgPackage)
+                    OverlayLockActivity.start(
+                        this,
+                        OverlayLockActivity.REASON_STUDY_ZONE,
+                        prefs.studyZoneName,
+                        fgPackage
+                    )
+                }
                 return
             }
 
@@ -166,13 +249,16 @@ class AppMonitorForegroundService : Service() {
             val limitSeconds = prefs.gameLimitMinutes * 60
 
             if (totalUsedSeconds >= limitSeconds || appUsedSeconds >= limitSeconds) {
-                Log.w(TAG, "Restricted game limit reached ($appUsedSeconds s used / $limitSeconds s limit). Showing lock overlay...")
-                OverlayLockActivity.start(
-                    this,
-                    OverlayLockActivity.REASON_GAME_LIMIT,
-                    getAppLabel(fgPackage),
-                    fgPackage
-                )
+                if (canTriggerLockAction()) {
+                    Log.w(TAG, "Restricted game limit reached ($appUsedSeconds s used / $totalUsedSeconds s total / $limitSeconds s limit). Ejecting and showing lock overlay...")
+                    ejectToHome(fgPackage)
+                    OverlayLockActivity.start(
+                        this,
+                        OverlayLockActivity.REASON_GAME_LIMIT,
+                        getAppLabel(fgPackage),
+                        fgPackage
+                    )
+                }
             }
         }
     }
@@ -193,20 +279,28 @@ class AppMonitorForegroundService : Service() {
     }
 
     private fun getForegroundPackage(now: Long): String? {
-        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return null
-        val events = usageStatsManager.queryEvents(now - 3000, now) ?: return null
+        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return lastKnownForegroundPkg
+        val lookbackMs = if (lastKnownForegroundPkg == null) 60_000L else 10_000L
+        val events = usageStatsManager.queryEvents(now - lookbackMs, now) ?: return lastKnownForegroundPkg
         val event = UsageEvents.Event()
-        var fgPkg: String? = null
+        var latestResumedPkg: String? = null
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
             if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
-                fgPkg = event.packageName
+                val pkg = event.packageName
+                if (!pkg.isNullOrBlank() && pkg != "com.android.systemui") {
+                    latestResumedPkg = pkg
+                }
             }
         }
-        return fgPkg
+        if (latestResumedPkg != null) {
+            lastKnownForegroundPkg = latestResumedPkg
+        }
+        return lastKnownForegroundPkg
     }
 
     private fun ejectToHome(pkgToKill: String? = null) {
+        lastKnownForegroundPkg = null
         try {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
             audioManager?.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MEDIA_PAUSE))
@@ -347,6 +441,10 @@ class AppMonitorForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        handler.removeCallbacks(monitorRunnable)
+        isRunning = false
+        handler.removeCallbacksAndMessages(null)
+        try {
+            unregisterReceiver(packageInstallReceiver)
+        } catch (_: Exception) {}
     }
 }

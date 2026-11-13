@@ -4,6 +4,7 @@ class InstalledAppModel {
   final bool isRestricted;
   final int usedMinutes;
   final bool isGame;
+  final bool isExempted;
 
   InstalledAppModel({
     required this.name,
@@ -11,6 +12,7 @@ class InstalledAppModel {
     required this.isRestricted,
     required this.usedMinutes,
     this.isGame = false,
+    this.isExempted = false,
   });
 
   factory InstalledAppModel.fromMap(Map<dynamic, dynamic> map) {
@@ -20,6 +22,7 @@ class InstalledAppModel {
       isRestricted: map['isRestricted'] as bool? ?? false,
       usedMinutes: (map['usedMinutes'] as num?)?.toInt() ?? 0,
       isGame: map['isGame'] as bool? ?? false,
+      isExempted: map['isExempted'] as bool? ?? false,
     );
   }
 }

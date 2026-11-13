@@ -11,6 +11,7 @@ import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
@@ -29,28 +30,19 @@ class DoomsAccessibilityService : AccessibilityService() {
         private const val MOJ_PACKAGE = "in.mohalla.video"
         private const val JOSH_PACKAGE = "com.eterno.shortvideos"
 
-        private val PAYMENT_AND_BANKING_PACKAGES = setOf(
-            "com.google.android.apps.nbu.paisa.user", // Google Pay (Tez)
-            "com.phonepe.app",                        // PhonePe
-            "net.one97.paytm",                        // Paytm
-            "in.org.npci.upiapp",                     // BHIM UPI
-            "com.dreamplug.androidapp",               // CRED
-            "com.naviapp",                            // Navi
-            "com.freecharge.android",                 // Freecharge
-            "com.mobikwik_new",                       // MobiKwik
-            "com.sbi.lotusintouch",                   // YONO SBI
-            "com.msf.kbank.mobile",                   // Kotak 811
-            "com.csam.icici.bank.imobile",            // ICICI iMobile
-            "com.snapwork.hdfc",                      // HDFC Bank MobileBanking
-            "com.axis.mobile",                        // Axis Mobile
-            "com.pnb.pnbone",                         // PNB ONE
-            "com.bankofbaroda.mconnect",              // bob World
-            "com.canarabank.ai1",                     // Canara ai1
-            "com.infrasoft.uboi",                     // Union Bank Vyom
-            "com.idfcfirstbank.optimus",              // IDFC FIRST Bank
-            "com.indusind.mobile",                    // IndusInd Mobile
-            "com.google.android.apps.authenticator2", // Google Authenticator
-            "com.azure.authenticator"                 // Microsoft Authenticator
+        private val TRANSIENT_OVERLAY_PACKAGES = setOf(
+            "com.google.android.inputmethod.latin",
+            "com.samsung.android.honeyboard",
+            "com.touchtype.swiftkey",
+            "com.google.android.permissioncontroller",
+            "com.android.permissioncontroller",
+            "com.samsung.android.game.gametools",
+            "com.samsung.android.game.gos",
+            "com.miui.securitycenter",
+            "com.xiaomi.joyose",
+            "com.coloros.gamespace",
+            "com.oplus.games",
+            "com.vivo.gamecube"
         )
 
         val SUPPORTED_BROWSER_PACKAGES = setOf(
@@ -82,15 +74,28 @@ class DoomsAccessibilityService : AccessibilityService() {
     }
 
     private fun isPaymentOrBankingApp(pkgName: String): Boolean {
-        if (PAYMENT_AND_BANKING_PACKAGES.contains(pkgName)) return true
+        return GameDetector.isPaymentOrBankingApp(pkgName)
+    }
+
+    private fun isTransientOverlayPackage(pkgName: String): Boolean {
+        if (pkgName == packageName ||
+            pkgName == "com.android.systemui" ||
+            pkgName.startsWith("com.android.systemui") ||
+            TRANSIENT_OVERLAY_PACKAGES.contains(pkgName)) {
+            return true
+        }
         val lower = pkgName.lowercase(Locale.US)
-        return lower.contains("banking") ||
-                lower.contains(".upi") ||
-                lower.contains("payment") ||
-                lower.contains(".wallet") ||
-                lower.contains("paisa") ||
-                lower.contains("paytm") ||
-                lower.contains("phonepe")
+        return lower.contains("inputmethod") || lower.contains(".keyboard")
+    }
+
+    private fun resetShortFormFlags() {
+        isInsideShorts = false
+        isInsideReels = false
+        isInsideSpotlight = false
+        isInsidePureShortForm = false
+        isInsideWebShorts = false
+        isInsideWebReels = false
+        isInsideWebYouTube = false
     }
 
     private lateinit var prefs: AppPreferences
@@ -106,6 +111,7 @@ class DoomsAccessibilityService : AccessibilityService() {
     private var isInsideWebYouTube = false
     private var lastActiveTimeMillis = 0L
     private var lastLockActionTimeMillis = 0L
+    private var lastServiceWatchdogMillis = 0L
 
     private fun canTriggerLockAction(): Boolean {
         val now = System.currentTimeMillis()
@@ -116,7 +122,7 @@ class DoomsAccessibilityService : AccessibilityService() {
         return true
     }
 
-    private fun destroyBackgroundMediaAndPlayer(pkg: String = YOUTUBE_PACKAGE) {
+    private fun destroyBackgroundMediaAndPlayer(pkg: String = YOUTUBE_PACKAGE, pressBack: Boolean = false) {
         // 1. Immediately request transient audio focus to kill/silence any active audio stream
         try {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
@@ -146,8 +152,10 @@ class DoomsAccessibilityService : AccessibilityService() {
             Log.e(TAG, "Error pausing audio focus: ${e.message}")
         }
 
-        // 2. Press BACK to exit playback activity so YouTube does not enter floating Picture-in-Picture
-        performGlobalAction(GLOBAL_ACTION_BACK)
+        // 2. Only press BACK when explicitly exiting inline playback without launching OverlayLockActivity (Invariant 4)
+        if (pressBack) {
+            performGlobalAction(GLOBAL_ACTION_BACK)
+        }
 
         // 3. Kill background processes to destroy floating PiP mini-player
         try {
@@ -377,6 +385,7 @@ class DoomsAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         prefs = AppPreferences(applicationContext)
         lastActiveTimeMillis = System.currentTimeMillis()
+        GameDetector.syncAllInstalledGames(this, prefs)
 
         // Ensure background monitor watchdog is running
         try {
@@ -394,10 +403,11 @@ class DoomsAccessibilityService : AccessibilityService() {
 
         val pkgName = event.packageName?.toString() ?: return
 
-        // Ignore system UI overlays (status bar, notifications, keyboard) so they don't corrupt activePackage
+        // Ignore system UI overlays, keyboards, self-overlay, and transient system dialogs so they don't corrupt activePackage
         if (pkgName == "com.android.systemui" ||
             pkgName == "com.google.android.inputmethod.latin" ||
-            pkgName.startsWith("com.android.systemui")) {
+            pkgName.startsWith("com.android.systemui") ||
+            isTransientOverlayPackage(pkgName)) {
             return
         }
 
@@ -437,16 +447,21 @@ class DoomsAccessibilityService : AccessibilityService() {
             handleBrowserEvent(event, pkgName)
         } else if (prefs.isStudyZoneActive && isSocialOrDistractionApp(pkgName)) {
             handleStudyZoneDistractionEvent(pkgName)
-        } else if (prefs.restrictedApps.contains(pkgName)) {
-            handleRestrictedAppEvent(pkgName)
+        } else if (isMandatoryOverride) {
+            val eventRoot = try { rootInActiveWindow } catch (_: Exception) { null }
+            val matchedRestricted = try {
+                val rootForPkg = if (eventRoot?.packageName?.toString() == pkgName) eventRoot else null
+                GameDetector.syncAndCheckRestricted(this, prefs, pkgName, rootForPkg)
+            } finally {
+                eventRoot?.recycle()
+            }
+            if (matchedRestricted) {
+                handleRestrictedAppEvent(pkgName)
+            } else {
+                resetShortFormFlags()
+            }
         } else {
-            isInsideShorts = false
-            isInsideReels = false
-            isInsideSpotlight = false
-            isInsidePureShortForm = false
-            isInsideWebShorts = false
-            isInsideWebReels = false
-            isInsideWebYouTube = false
+            resetShortFormFlags()
         }
     }
 
@@ -1052,289 +1067,314 @@ class DoomsAccessibilityService : AccessibilityService() {
 
         if (deltaSeconds <= 0) return
 
-        // Check active foreground window directly
-        val rootNode = rootInActiveWindow
-        val windowPkg = rootNode?.packageName?.toString() ?: activePackage
+        val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        if (powerManager != null && !powerManager.isInteractive) {
+            return
+        }
 
-        // Detect if YouTube or a browser is active in Picture-in-Picture (PiP) mode
-        val pipPkg = detectActivePipPackage()
-        val isPipActive = (pipPkg == YOUTUBE_PACKAGE) || (pipPkg != null && isBrowserPackage(pipPkg))
-
-        if (prefs.isKidsModeEnabled && isPipActive) {
-            val isYtLocked = prefs.youtubeLockUntilTimestamp > now ||
-                (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
-            if (isYtLocked && canTriggerLockAction()) {
-                Log.w(TAG, "Periodic tick: Kids Mode active and YouTube limit reached in PiP! Ejecting...")
-                destroyBackgroundMediaAndPlayer(pipPkg ?: YOUTUBE_PACKAGE)
-                dismissPictureInPictureIfPresent()
-                OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = pipPkg ?: YOUTUBE_PACKAGE)
+        // Lightweight periodic watchdog: ensure foreground monitor service stays alive if killed by OEM
+        if (now - lastServiceWatchdogMillis >= 30_000L) {
+            lastServiceWatchdogMillis = now
+            if (!AppMonitorForegroundService.isRunning) {
+                try {
+                    AppMonitorForegroundService.start(this)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Watchdog failed to restart AppMonitorForegroundService: ${e.message}")
+                }
             }
         }
 
-        val isMandatoryOverride = prefs.isStudyZoneActive || prefs.isKidsModeEnabled
+        // Check active foreground window directly
+        val rootNode = try { rootInActiveWindow } catch (_: Exception) { null }
+        try {
+            val windowPkg = rootNode?.packageName?.toString() ?: activePackage
 
-        if (windowPkg == YOUTUBE_PACKAGE && (isMandatoryOverride || prefs.isShortFormMonitored(YOUTUBE_PACKAGE))) {
-            activePackage = YOUTUBE_PACKAGE
-            isInsideReels = false
-            isInsideSpotlight = false
-            isInsidePureShortForm = false
-            if (rootNode != null) {
-                try {
-                    isInsideShorts = detectShortsPresence(rootNode)
-                    checkAndBlockRestrictedChannels(rootNode)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error in YouTube periodic tick: ${e.message}")
-                }
-            }
+            // Detect if YouTube or a browser is active in Picture-in-Picture (PiP) mode
+            val pipPkg = detectActivePipPackage()
+            val isPipActive = (pipPkg == YOUTUBE_PACKAGE) || (pipPkg != null && isBrowserPackage(pipPkg))
 
-            if (prefs.isKidsModeEnabled) {
+            if (prefs.isKidsModeEnabled && isPipActive) {
                 val isYtLocked = prefs.youtubeLockUntilTimestamp > now ||
                     (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
                 if (isYtLocked && canTriggerLockAction()) {
-                    Log.w(TAG, "Periodic tick: Kids Mode active and YouTube limit reached! Ejecting...")
-                    destroyBackgroundMediaAndPlayer(YOUTUBE_PACKAGE)
+                    Log.w(TAG, "Periodic tick: Kids Mode active and YouTube limit reached in PiP! Ejecting...")
+                    destroyBackgroundMediaAndPlayer(pipPkg ?: YOUTUBE_PACKAGE)
                     dismissPictureInPictureIfPresent()
-                    OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = YOUTUBE_PACKAGE)
+                    OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = pipPkg ?: YOUTUBE_PACKAGE)
                 }
             }
-        } else if (windowPkg == INSTAGRAM_PACKAGE && (isMandatoryOverride || prefs.isShortFormMonitored(INSTAGRAM_PACKAGE))) {
-            activePackage = INSTAGRAM_PACKAGE
-            isInsideShorts = false
-            isInsideReels = true
-            isInsideSpotlight = false
-            isInsidePureShortForm = false
 
-            val isShortFormLocked = prefs.youtubeLockUntilTimestamp > now ||
-                (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
-            if (isShortFormLocked) {
-                if (canTriggerLockAction()) {
-                    Log.d(TAG, "Periodic tick: Instagram active during short-form lockout! Showing lock overlay...")
-                    destroyBackgroundMediaAndPlayer(INSTAGRAM_PACKAGE)
-                    dismissPictureInPictureIfPresent()
-                    OverlayLockActivity.start(
-                        this,
-                        OverlayLockActivity.REASON_SHORTS_LIMIT,
-                        targetPackage = INSTAGRAM_PACKAGE
-                    )
-                }
-            }
-        } else if (windowPkg == SNAPCHAT_PACKAGE && (isMandatoryOverride || prefs.isShortFormMonitored(SNAPCHAT_PACKAGE))) {
-            activePackage = SNAPCHAT_PACKAGE
-            isInsideShorts = false
-            isInsideReels = false
-            isInsidePureShortForm = false
-            if (rootNode != null) {
-                try {
-                    isInsideSpotlight = detectSnapchatSpotlightPresence(rootNode)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error in Snapchat periodic tick: ${e.message}")
-                }
-            }
-            if (isInsideSpotlight) {
-                val isShortFormLocked = prefs.youtubeLockUntilTimestamp > now ||
-                    (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
-                if (isShortFormLocked && canTriggerLockAction()) {
-                    destroyBackgroundMediaAndPlayer(SNAPCHAT_PACKAGE)
-                    OverlayLockActivity.start(
-                        this,
-                        OverlayLockActivity.REASON_SHORTS_LIMIT,
-                        targetPackage = SNAPCHAT_PACKAGE
-                    )
-                }
-            }
-        } else if (windowPkg != null && isPureShortFormPackage(windowPkg) && (isMandatoryOverride || prefs.isShortFormMonitored(windowPkg))) {
-            activePackage = windowPkg
-            isInsideShorts = false
-            isInsideReels = false
-            isInsideSpotlight = false
-            isInsidePureShortForm = true
-            val isShortFormLocked = prefs.youtubeLockUntilTimestamp > now ||
-                (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
-            if (isShortFormLocked && canTriggerLockAction()) {
-                destroyBackgroundMediaAndPlayer(windowPkg)
-                dismissPictureInPictureIfPresent()
-                OverlayLockActivity.start(
-                    this,
-                    OverlayLockActivity.REASON_SHORTS_LIMIT,
-                    targetPackage = windowPkg
-                )
-            }
-        } else if (windowPkg != null && isBrowserPackage(windowPkg)) {
-            activePackage = windowPkg
-            isInsideShorts = false
-            isInsideReels = false
-            isInsideSpotlight = false
-            isInsidePureShortForm = false
+            val isMandatoryOverride = prefs.isStudyZoneActive || prefs.isKidsModeEnabled
 
-            if (rootNode != null) {
-                try {
-                    val detected = detectBrowserUrlOrDomain(rootNode, windowPkg)
-                    when (detected) {
-                        "youtube_shorts" -> {
-                            isInsideWebShorts = true
-                            isInsideWebReels = false
-                            isInsideWebYouTube = false
-                        }
-                        "youtube_watch" -> {
-                            isInsideWebShorts = false
-                            isInsideWebReels = false
-                            isInsideWebYouTube = true
-                        }
-                        "instagram", "facebook", "tiktok", "snapchat", "twitter", "reddit", "pure_short_form" -> {
-                            isInsideWebShorts = false
-                            isInsideWebReels = true
-                            isInsideWebYouTube = false
-                        }
-                        else -> {
-                            isInsideWebShorts = false
-                            isInsideWebReels = false
-                            isInsideWebYouTube = false
-                        }
+            if (windowPkg == YOUTUBE_PACKAGE && (isMandatoryOverride || prefs.isShortFormMonitored(YOUTUBE_PACKAGE))) {
+                activePackage = YOUTUBE_PACKAGE
+                isInsideReels = false
+                isInsideSpotlight = false
+                isInsidePureShortForm = false
+                if (rootNode != null) {
+                    try {
+                        isInsideShorts = detectShortsPresence(rootNode)
+                        checkAndBlockRestrictedChannels(rootNode)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error in YouTube periodic tick: ${e.message}")
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error in browser periodic tick: ${e.message}")
                 }
-            }
 
-            if (prefs.isKidsModeEnabled) {
-                if (isInsideWebYouTube) {
+                if (prefs.isKidsModeEnabled) {
                     val isYtLocked = prefs.youtubeLockUntilTimestamp > now ||
                         (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
                     if (isYtLocked && canTriggerLockAction()) {
-                        Log.w(TAG, "Periodic tick: Kids Mode web YouTube limit reached! Ejecting...")
-                        destroyBackgroundMediaAndPlayer(windowPkg)
+                        Log.w(TAG, "Periodic tick: Kids Mode active and YouTube limit reached! Ejecting...")
+                        destroyBackgroundMediaAndPlayer(YOUTUBE_PACKAGE)
                         dismissPictureInPictureIfPresent()
-                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = windowPkg)
-                    }
-                } else if (isInsideWebShorts) {
-                    if (canTriggerLockAction()) {
-                        destroyBackgroundMediaAndPlayer(windowPkg)
-                        dismissPictureInPictureIfPresent()
-                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_KIDS_SHORTS_BLOCKED, targetPackage = windowPkg)
-                    }
-                } else if (isInsideWebReels) {
-                    if (canTriggerLockAction()) {
-                        destroyBackgroundMediaAndPlayer(windowPkg)
-                        dismissPictureInPictureIfPresent()
-                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_KIDS_SOCIAL_BLOCKED, targetPackage = windowPkg)
+                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = YOUTUBE_PACKAGE)
                     }
                 }
-            } else if (prefs.isStudyZoneActive) {
-                if (isInsideWebShorts || isInsideWebReels) {
-                    if (canTriggerLockAction()) {
-                        destroyBackgroundMediaAndPlayer(windowPkg)
-                        dismissPictureInPictureIfPresent()
-                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_STUDY_ZONE, prefs.studyZoneName, windowPkg)
-                    }
-                }
-            } else {
-                // Adult Focus Mode
+            } else if (windowPkg == INSTAGRAM_PACKAGE && (isMandatoryOverride || prefs.isShortFormMonitored(INSTAGRAM_PACKAGE))) {
+                activePackage = INSTAGRAM_PACKAGE
+                isInsideShorts = false
+                isInsideReels = true
+                isInsideSpotlight = false
+                isInsidePureShortForm = false
+
                 val isShortFormLocked = prefs.youtubeLockUntilTimestamp > now ||
                     (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
-                if (isShortFormLocked && (isInsideWebShorts || isInsideWebReels)) {
+                if (isShortFormLocked) {
                     if (canTriggerLockAction()) {
-                        destroyBackgroundMediaAndPlayer(windowPkg)
+                        Log.d(TAG, "Periodic tick: Instagram active during short-form lockout! Showing lock overlay...")
+                        destroyBackgroundMediaAndPlayer(INSTAGRAM_PACKAGE)
                         dismissPictureInPictureIfPresent()
-                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_SHORTS_LIMIT, targetPackage = windowPkg)
+                        OverlayLockActivity.start(
+                            this,
+                            OverlayLockActivity.REASON_SHORTS_LIMIT,
+                            targetPackage = INSTAGRAM_PACKAGE
+                        )
                     }
                 }
+            } else if (windowPkg == SNAPCHAT_PACKAGE && (isMandatoryOverride || prefs.isShortFormMonitored(SNAPCHAT_PACKAGE))) {
+                activePackage = SNAPCHAT_PACKAGE
+                isInsideShorts = false
+                isInsideReels = false
+                isInsidePureShortForm = false
+                if (rootNode != null) {
+                    try {
+                        isInsideSpotlight = detectSnapchatSpotlightPresence(rootNode)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error in Snapchat periodic tick: ${e.message}")
+                    }
+                }
+                if (isInsideSpotlight) {
+                    val isShortFormLocked = prefs.youtubeLockUntilTimestamp > now ||
+                        (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
+                    if (isShortFormLocked && canTriggerLockAction()) {
+                        destroyBackgroundMediaAndPlayer(SNAPCHAT_PACKAGE)
+                        OverlayLockActivity.start(
+                            this,
+                            OverlayLockActivity.REASON_SHORTS_LIMIT,
+                            targetPackage = SNAPCHAT_PACKAGE
+                        )
+                    }
+                }
+            } else if (windowPkg != null && isPureShortFormPackage(windowPkg) && (isMandatoryOverride || prefs.isShortFormMonitored(windowPkg))) {
+                activePackage = windowPkg
+                isInsideShorts = false
+                isInsideReels = false
+                isInsideSpotlight = false
+                isInsidePureShortForm = true
+                val isShortFormLocked = prefs.youtubeLockUntilTimestamp > now ||
+                    (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
+                if (isShortFormLocked && canTriggerLockAction()) {
+                    destroyBackgroundMediaAndPlayer(windowPkg)
+                    dismissPictureInPictureIfPresent()
+                    OverlayLockActivity.start(
+                        this,
+                        OverlayLockActivity.REASON_SHORTS_LIMIT,
+                        targetPackage = windowPkg
+                    )
+                }
+            } else if (windowPkg != null && isBrowserPackage(windowPkg)) {
+                activePackage = windowPkg
+                isInsideShorts = false
+                isInsideReels = false
+                isInsideSpotlight = false
+                isInsidePureShortForm = false
+
+                if (rootNode != null) {
+                    try {
+                        val detected = detectBrowserUrlOrDomain(rootNode, windowPkg)
+                        when (detected) {
+                            "youtube_shorts" -> {
+                                isInsideWebShorts = true
+                                isInsideWebReels = false
+                                isInsideWebYouTube = false
+                            }
+                            "youtube_watch" -> {
+                                isInsideWebShorts = false
+                                isInsideWebReels = false
+                                isInsideWebYouTube = true
+                            }
+                            "instagram", "facebook", "tiktok", "snapchat", "twitter", "reddit", "pure_short_form" -> {
+                                isInsideWebShorts = false
+                                isInsideWebReels = true
+                                isInsideWebYouTube = false
+                            }
+                            else -> {
+                                isInsideWebShorts = false
+                                isInsideWebReels = false
+                                isInsideWebYouTube = false
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error in browser periodic tick: ${e.message}")
+                    }
+                }
+
+                if (prefs.isKidsModeEnabled) {
+                    if (isInsideWebYouTube) {
+                        val isYtLocked = prefs.youtubeLockUntilTimestamp > now ||
+                            (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
+                        if (isYtLocked && canTriggerLockAction()) {
+                            Log.w(TAG, "Periodic tick: Kids Mode web YouTube limit reached! Ejecting...")
+                            destroyBackgroundMediaAndPlayer(windowPkg)
+                            dismissPictureInPictureIfPresent()
+                            OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = windowPkg)
+                        }
+                    } else if (isInsideWebShorts) {
+                        if (canTriggerLockAction()) {
+                            destroyBackgroundMediaAndPlayer(windowPkg)
+                            dismissPictureInPictureIfPresent()
+                            OverlayLockActivity.start(this, OverlayLockActivity.REASON_KIDS_SHORTS_BLOCKED, targetPackage = windowPkg)
+                        }
+                    } else if (isInsideWebReels) {
+                        if (canTriggerLockAction()) {
+                            destroyBackgroundMediaAndPlayer(windowPkg)
+                            dismissPictureInPictureIfPresent()
+                            OverlayLockActivity.start(this, OverlayLockActivity.REASON_KIDS_SOCIAL_BLOCKED, targetPackage = windowPkg)
+                        }
+                    }
+                } else if (prefs.isStudyZoneActive) {
+                    if (isInsideWebShorts || isInsideWebReels) {
+                        if (canTriggerLockAction()) {
+                            destroyBackgroundMediaAndPlayer(windowPkg)
+                            dismissPictureInPictureIfPresent()
+                            OverlayLockActivity.start(this, OverlayLockActivity.REASON_STUDY_ZONE, prefs.studyZoneName, windowPkg)
+                        }
+                    }
+                } else {
+                    // Adult Focus Mode
+                    val isShortFormLocked = prefs.youtubeLockUntilTimestamp > now ||
+                        (prefs.shortsUsedSecondsToday >= prefs.shortsLimitMinutes * 60)
+                    if (isShortFormLocked && (isInsideWebShorts || isInsideWebReels)) {
+                        if (canTriggerLockAction()) {
+                            destroyBackgroundMediaAndPlayer(windowPkg)
+                            dismissPictureInPictureIfPresent()
+                            OverlayLockActivity.start(this, OverlayLockActivity.REASON_SHORTS_LIMIT, targetPackage = windowPkg)
+                        }
+                    }
+                }
+            } else {
+                if (windowPkg != null &&
+                    !GameDetector.isSystemIgnoredPackage(windowPkg) &&
+                    !GameDetector.isPaymentOrBankingApp(windowPkg) &&
+                    windowPkg != packageName &&
+                    !isTransientOverlayPackage(windowPkg)
+                ) {
+                    activePackage = windowPkg
+                }
+                resetShortFormFlags()
             }
-        } else {
-            isInsideShorts = false
-            isInsideReels = false
-            isInsideSpotlight = false
-            isInsidePureShortForm = false
-            isInsideWebShorts = false
-            isInsideWebReels = false
-            isInsideWebYouTube = false
-        }
 
-        // 1. Screen Time Tracking
-        if (prefs.isKidsModeEnabled) {
-            // Kids Mode: Long-form YouTube on native app OR supported web browser OR active PiP increments screen time!
-            val isKidsYouTubeActive = (activePackage == YOUTUBE_PACKAGE) ||
-                (activePackage != null && isBrowserPackage(activePackage!!) && isInsideWebYouTube) ||
-                isPipActive
+            // 1. Screen Time Tracking
+            if (prefs.isKidsModeEnabled) {
+                // Kids Mode: Long-form YouTube on native app OR supported web browser OR active PiP increments screen time!
+                val isKidsYouTubeActive = (activePackage == YOUTUBE_PACKAGE) ||
+                    (activePackage != null && isBrowserPackage(activePackage!!) && isInsideWebYouTube) ||
+                    isPipActive
 
-            if (isKidsYouTubeActive) {
-                prefs.addShortsUsedSeconds(deltaSeconds)
-                val usedSec = prefs.shortsUsedSecondsToday
-                val limitSec = prefs.shortsLimitMinutes * 60
-                val targetPkg = if (isPipActive && pipPkg != null) pipPkg else (activePackage ?: YOUTUBE_PACKAGE)
-                if (usedSec >= limitSec) {
-                    if (canTriggerLockAction()) {
-                        Log.w(TAG, "Kids Mode: Long-form YouTube limit reached ($usedSec >= $limitSec s)! Setting 30m cooldown...")
-                        prefs.youtubeLockUntilTimestamp = now + 30 * 60 * 1000L
+                if (isKidsYouTubeActive) {
+                    prefs.addShortsUsedSeconds(deltaSeconds)
+                    val usedSec = prefs.shortsUsedSecondsToday
+                    val limitSec = prefs.shortsLimitMinutes * 60
+                    val targetPkg = if (isPipActive && pipPkg != null) pipPkg else (activePackage ?: YOUTUBE_PACKAGE)
+                    if (usedSec >= limitSec) {
+                        if (canTriggerLockAction()) {
+                            Log.w(TAG, "Kids Mode: Long-form YouTube limit reached ($usedSec >= $limitSec s)! Setting 30m cooldown...")
+                            prefs.youtubeLockUntilTimestamp = now + 30 * 60 * 1000L
+                            destroyBackgroundMediaAndPlayer(targetPkg)
+                            dismissPictureInPictureIfPresent()
+                            OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = targetPkg)
+                        }
+                    }
+                }
+            } else {
+                // Adult Focus Mode: Unified short-form tracking
+                val isShortFormActive = (activePackage == YOUTUBE_PACKAGE && isInsideShorts) ||
+                                        (activePackage == INSTAGRAM_PACKAGE && isInsideReels) ||
+                                        (activePackage == SNAPCHAT_PACKAGE && isInsideSpotlight) ||
+                                        (isInsidePureShortForm) ||
+                                        (isInsideWebShorts) ||
+                                        (isInsideWebReels)
+
+                if (isShortFormActive) {
+                    prefs.addShortsUsedSeconds(deltaSeconds)
+                    val usedSec = prefs.shortsUsedSecondsToday
+                    val limitSec = prefs.shortsLimitMinutes * 60
+                    val targetPkg = activePackage ?: YOUTUBE_PACKAGE
+
+                    Log.d(TAG, "Unified Short-Form Active ($targetPkg): $usedSec s / $limitSec s limit (Limit: ${prefs.shortsLimitMinutes} min)")
+
+                    if (usedSec >= limitSec) {
+                        if (!canTriggerLockAction()) return
+                        Log.w(TAG, "Shorts/Reels limit hit ($usedSec >= $limitSec s)! Enforcing Lockout for ${prefs.shortsLockDurationMinutes} min!")
+                        val lockDurationMillis = prefs.shortsLockDurationMinutes * 60 * 1000L
+                        prefs.youtubeLockUntilTimestamp = now + lockDurationMillis
+
                         destroyBackgroundMediaAndPlayer(targetPkg)
                         dismissPictureInPictureIfPresent()
-                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_YOUTUBE_LOCKED, targetPackage = targetPkg)
+                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_SHORTS_LIMIT, targetPackage = targetPkg)
+                        isInsideShorts = false
+                        isInsideReels = false
+                        isInsideSpotlight = false
+                        isInsidePureShortForm = false
                     }
                 }
             }
-        } else {
-            // Adult Focus Mode: Unified short-form tracking
-            val isShortFormActive = (activePackage == YOUTUBE_PACKAGE && isInsideShorts) ||
-                                    (activePackage == INSTAGRAM_PACKAGE && isInsideReels) ||
-                                    (activePackage == SNAPCHAT_PACKAGE && isInsideSpotlight) ||
-                                    (isInsidePureShortForm) ||
-                                    (isInsideWebShorts) ||
-                                    (isInsideWebReels)
 
-            if (isShortFormActive) {
-                prefs.addShortsUsedSeconds(deltaSeconds)
-                val usedSec = prefs.shortsUsedSecondsToday
-                val limitSec = prefs.shortsLimitMinutes * 60
-                val targetPkg = activePackage ?: YOUTUBE_PACKAGE
-
-                Log.d(TAG, "Unified Short-Form Active ($targetPkg): $usedSec s / $limitSec s limit (Limit: ${prefs.shortsLimitMinutes} min)")
-
-                if (usedSec >= limitSec) {
+            // 2. Restricted Game Apps Time Tracking (Strictly scoped to Kids Mode & Study Zone)
+            val currentPkg = activePackage
+            val isGameEnforcementActive = prefs.isKidsModeEnabled || prefs.isStudyZoneActive
+            val rootForCurrentPkg = if (rootNode?.packageName?.toString() == currentPkg) rootNode else null
+            if (currentPkg != null && isGameEnforcementActive && GameDetector.syncAndCheckRestricted(this, prefs, currentPkg, rootForCurrentPkg)) {
+                if (prefs.isStudyZoneActive) {
                     if (!canTriggerLockAction()) return
-                    Log.w(TAG, "Shorts/Reels limit hit ($usedSec >= $limitSec s)! Enforcing Lockout for ${prefs.shortsLockDurationMinutes} min!")
-                    val lockDurationMillis = prefs.shortsLockDurationMinutes * 60 * 1000L
-                    prefs.youtubeLockUntilTimestamp = now + lockDurationMillis
-
-                    destroyBackgroundMediaAndPlayer(targetPkg)
-                    dismissPictureInPictureIfPresent()
-                    OverlayLockActivity.start(this, OverlayLockActivity.REASON_SHORTS_LIMIT, targetPackage = targetPkg)
-                    isInsideShorts = false
-                    isInsideReels = false
-                    isInsideSpotlight = false
-                    isInsidePureShortForm = false
-                }
-            }
-        }
-        rootNode?.recycle()
-
-        // 2. Restricted Game Apps Time Tracking (Smooth 5s lock overlay)
-        val currentPkg = activePackage
-        if (currentPkg != null && prefs.restrictedApps.contains(currentPkg)) {
-            if (prefs.isStudyZoneActive) {
-                if (!canTriggerLockAction()) return
-                Log.w(TAG, "Study Zone Active: $currentPkg opened during focus hours! Showing smooth lock overlay...")
-                destroyBackgroundMediaAndPlayer(currentPkg)
-                dismissPictureInPictureIfPresent()
-                OverlayLockActivity.start(
-                    this,
-                    OverlayLockActivity.REASON_STUDY_ZONE,
-                    prefs.studyZoneName,
-                    currentPkg
-                )
-            } else {
-                prefs.addAppUsageSeconds(currentPkg, deltaSeconds)
-                val totalUsed = prefs.getTotalRestrictedAppsUsageSeconds()
-                val limitSec = prefs.gameLimitMinutes * 60
-
-                Log.d(TAG, "Restricted App ($currentPkg) Active: $totalUsed s / $limitSec s limit")
-
-                if (totalUsed >= limitSec) {
-                    if (!canTriggerLockAction()) return
-                    Log.w(TAG, "Game limit reached ($totalUsed >= $limitSec s)! Showing smooth lock overlay...")
+                    Log.w(TAG, "Study Zone Active: $currentPkg opened during focus hours! Showing smooth lock overlay...")
                     destroyBackgroundMediaAndPlayer(currentPkg)
                     dismissPictureInPictureIfPresent()
-                    OverlayLockActivity.start(this, OverlayLockActivity.REASON_GAME_LIMIT, getAppLabel(currentPkg), currentPkg)
+                    OverlayLockActivity.start(
+                        this,
+                        OverlayLockActivity.REASON_STUDY_ZONE,
+                        prefs.studyZoneName,
+                        currentPkg
+                    )
+                } else {
+                    prefs.addAppUsageSeconds(currentPkg, deltaSeconds)
+                    val appUsed = prefs.getAppUsageSeconds(currentPkg)
+                    val totalUsed = prefs.getTotalRestrictedAppsUsageSeconds()
+                    val limitSec = prefs.gameLimitMinutes * 60
+
+                    Log.d(TAG, "Restricted App ($currentPkg) Active: $totalUsed s / $limitSec s limit")
+
+                    if (totalUsed >= limitSec || appUsed >= limitSec) {
+                        if (!canTriggerLockAction()) return
+                        Log.w(TAG, "Game limit reached ($totalUsed >= $limitSec s)! Showing smooth lock overlay...")
+                        destroyBackgroundMediaAndPlayer(currentPkg)
+                        dismissPictureInPictureIfPresent()
+                        OverlayLockActivity.start(this, OverlayLockActivity.REASON_GAME_LIMIT, getAppLabel(currentPkg), currentPkg)
+                    }
                 }
             }
+        } finally {
+            rootNode?.recycle()
         }
     }
 
@@ -1354,13 +1394,13 @@ class DoomsAccessibilityService : AccessibilityService() {
     }
 
     private fun exitShortsPlayer() {
-        destroyBackgroundMediaAndPlayer(YOUTUBE_PACKAGE)
+        destroyBackgroundMediaAndPlayer(YOUTUBE_PACKAGE, pressBack = true)
         dismissPictureInPictureIfPresent()
     }
 
     private fun ejectToHomeScreen(pkgToKill: String? = null) {
         val target = pkgToKill ?: YOUTUBE_PACKAGE
-        destroyBackgroundMediaAndPlayer(target)
+        destroyBackgroundMediaAndPlayer(target, pressBack = true)
         dismissPictureInPictureIfPresent()
         performGlobalAction(GLOBAL_ACTION_HOME)
         try {

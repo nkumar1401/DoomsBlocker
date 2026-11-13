@@ -6,6 +6,7 @@ class DashboardData {
   final int youtubeLockRemainingSeconds;
   final bool isNephewModeEnabled;
   final int gameLimitMinutes;
+  final bool autoRestrictGames;
   final int restrictedAppsCount;
   final int blockedChannelsCount;
   final bool isStudyZoneActive;
@@ -24,6 +25,7 @@ class DashboardData {
     required this.youtubeLockRemainingSeconds,
     required this.isNephewModeEnabled,
     required this.gameLimitMinutes,
+    this.autoRestrictGames = true,
     required this.restrictedAppsCount,
     required this.blockedChannelsCount,
     required this.isStudyZoneActive,
@@ -56,6 +58,7 @@ class DashboardData {
           map['isNephewModeEnabled'] as bool? ??
           false,
       gameLimitMinutes: (map['gameLimitMinutes'] as num?)?.toInt() ?? 20,
+      autoRestrictGames: map['autoRestrictGames'] as bool? ?? true,
       restrictedAppsCount: (map['restrictedAppsCount'] as num?)?.toInt() ?? 0,
       blockedChannelsCount: (map['blockedChannelsCount'] as num?)?.toInt() ?? 0,
       isStudyZoneActive: map['isStudyZoneActive'] as bool? ?? false,
@@ -75,6 +78,7 @@ class DashboardData {
       youtubeLockRemainingSeconds: 0,
       isNephewModeEnabled: false,
       gameLimitMinutes: 20,
+      autoRestrictGames: true,
       restrictedAppsCount: 0,
       blockedChannelsCount: 0,
       isStudyZoneActive: false,

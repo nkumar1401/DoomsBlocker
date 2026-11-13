@@ -12,6 +12,7 @@ class GameLimitsScreen extends StatefulWidget {
 
 class _GameLimitsScreenState extends State<GameLimitsScreen> {
   int _gameLimitMinutes = 20;
+  bool _autoRestrictGames = true;
   List<InstalledAppModel> _allApps = [];
   List<InstalledAppModel> _filteredApps = [];
   bool _isLoading = true;
@@ -24,17 +25,30 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     final data = await NativeBridge.getDashboardData();
     final apps = await NativeBridge.getInstalledApps();
     if (mounted) {
       setState(() {
         _gameLimitMinutes = data.gameLimitMinutes;
+        _autoRestrictGames = data.autoRestrictGames;
         _allApps = apps;
         _filterApps(_searchController.text);
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _toggleAutoRestrictGames(bool enabled) async {
+    setState(() => _autoRestrictGames = enabled);
+    await NativeBridge.setAutoRestrictGames(enabled);
+    await _load();
   }
 
   void _filterApps(String query) {
@@ -83,8 +97,8 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
               children: [
                 // Top Limit Slider Card
                 Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  padding: const EdgeInsets.all(18),
+                  margin: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
@@ -119,7 +133,7 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF3B82F6).withOpacity(0.2),
+                                color: const Color(0xFF3B82F6).withOpacity(0.15),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.4)),
                               ),
@@ -138,21 +152,87 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Text(
-                        'Marked games will be auto-locked once played for $_gameLimitMinutes minutes during Kids Mode.',
-                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                        'Marked games share a $_gameLimitMinutes min daily pool in Kids Mode & are blocked during Study Zone.',
+                        style: const TextStyle(color: Color(0xFF64748B), fontSize: 11.5),
                       ),
-                      const SizedBox(height: 10),
-                      Slider(
-                        value: _gameLimitMinutes.toDouble(),
-                        min: 5,
-                        max: 60,
-                        divisions: 11,
-                        activeColor: const Color(0xFF3B82F6),
-                        inactiveColor: const Color(0xFF334155),
-                        label: '$_gameLimitMinutes min',
-                        onChanged: (val) => _updateLimit(val.round()),
+                      const SizedBox(height: 6),
+                      SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 3.5,
+                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                          overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                        ),
+                        child: Slider(
+                          value: _gameLimitMinutes.toDouble().clamp(5.0, 60.0),
+                          min: 5,
+                          max: 60,
+                          divisions: 11,
+                          activeColor: const Color(0xFF3B82F6),
+                          inactiveColor: const Color(0xFFE2E8F0),
+                          label: '$_gameLimitMinutes min',
+                          onChanged: (val) => _updateLimit(val.round()),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Auto-Restrict Newly Installed & Existing Games Toggle Card
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: _autoRestrictGames
+                          ? const Color(0xFF10B981).withOpacity(0.45)
+                          : const Color(0xFFE2E8F0),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: _autoRestrictGames
+                              ? const Color(0xFF10B981).withOpacity(0.12)
+                              : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          Icons.auto_awesome_rounded,
+                          color: _autoRestrictGames ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Auto-Restrict New & Installed Games',
+                              style: TextStyle(
+                                color: Color(0xFF0F172A),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13.5,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Silently adds newly downloaded & existing games. Uncheck any game below to exempt it.',
+                              style: TextStyle(color: Color(0xFF64748B), fontSize: 11.5, height: 1.25),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: _autoRestrictGames,
+                        activeColor: const Color(0xFF10B981),
+                        onChanged: _toggleAutoRestrictGames,
                       ),
                     ],
                   ),
@@ -305,6 +385,25 @@ class _GameLimitsScreenState extends State<GameLimitsScreen> {
                                                   'GAME',
                                                   style: TextStyle(
                                                     color: Color(0xFF7C3AED),
+                                                    fontSize: 8.5,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                            if (app.isGame && !app.isRestricted && app.isExempted) ...[
+                                              const SizedBox(width: 5),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF10B981).withOpacity(0.12),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                  border: Border.all(color: const Color(0xFF10B981).withOpacity(0.35)),
+                                                ),
+                                                child: const Text(
+                                                  'ALLOWED',
+                                                  style: TextStyle(
+                                                    color: Color(0xFF047857),
                                                     fontSize: 8.5,
                                                     fontWeight: FontWeight.bold,
                                                   ),

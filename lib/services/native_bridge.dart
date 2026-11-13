@@ -100,6 +100,17 @@ class NativeBridge {
     }
   }
 
+  static Future<bool> setAutoRestrictGames(bool enabled) async {
+    try {
+      final res = await _channel.invokeMethod<bool>('setAutoRestrictGames', {
+        'enabled': enabled,
+      });
+      return res ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   static Future<List<InstalledAppModel>> getInstalledApps() async {
     try {
       final res = await _channel.invokeListMethod<dynamic>('getInstalledApps');

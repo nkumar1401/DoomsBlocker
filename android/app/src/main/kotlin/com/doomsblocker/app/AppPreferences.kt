@@ -22,6 +22,8 @@ class AppPreferences(context: Context) {
         private const val KEY_PARENT_PIN = "parent_pin"
         private const val KEY_GAME_LIMIT_MINS = "game_limit_mins"
         private const val KEY_RESTRICTED_APPS = "restricted_apps"
+        private const val KEY_EXEMPTED_GAMES = "exempted_games"
+        private const val KEY_AUTO_RESTRICT_GAMES = "auto_restrict_games"
         private const val KEY_APP_USAGE_SECONDS = "app_usage_seconds"
         private const val KEY_BLOCKED_CHANNELS = "blocked_channels"
         private const val KEY_STUDY_ZONE_ACTIVE = "study_zone_active"
@@ -29,6 +31,7 @@ class AppPreferences(context: Context) {
         private const val KEY_STUDY_ZONE_START = "study_zone_start"
         private const val KEY_STUDY_ZONE_EXPIRE = "study_zone_expire"
         private const val KEY_ENABLED_SHORT_FORM_APPS = "enabled_short_form_apps"
+        private const val KEY_LAST_PLAY_INSTALL_TS = "last_play_install_ts"
 
         const val PKG_YOUTUBE = "com.google.android.youtube"
         const val PKG_INSTAGRAM = "com.instagram.android"
@@ -36,6 +39,11 @@ class AppPreferences(context: Context) {
         const val PKG_SHARECHAT = "in.mohalla.sharechat"
         const val PKG_MOJ = "in.mohalla.video"
         const val PKG_JOSH = "com.eterno.shortvideos"
+
+        private val usageLock = Any()
+
+        @Volatile
+        var lastAppUsageIncrementTimestamp: Long = 0L
     }
 
     init {
@@ -43,14 +51,17 @@ class AppPreferences(context: Context) {
     }
 
     private fun checkDailyReset() {
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-        val lastDate = prefs.getString(KEY_LAST_RESET_DATE, "")
-        if (today != lastDate) {
-            prefs.edit()
-                .putString(KEY_LAST_RESET_DATE, today)
-                .putInt(KEY_SHORTS_USED_SECONDS, 0)
-                .putString(KEY_APP_USAGE_SECONDS, "{}")
-                .apply()
+        synchronized(usageLock) {
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+            val lastDate = prefs.getString(KEY_LAST_RESET_DATE, "")
+            if (today != lastDate) {
+                lastAppUsageIncrementTimestamp = 0L
+                prefs.edit()
+                    .putString(KEY_LAST_RESET_DATE, today)
+                    .putInt(KEY_SHORTS_USED_SECONDS, 0)
+                    .putString(KEY_APP_USAGE_SECONDS, "{}")
+                    .apply()
+            }
         }
     }
 
@@ -128,24 +139,104 @@ class AppPreferences(context: Context) {
         get() = prefs.getInt(KEY_GAME_LIMIT_MINS, 20) // Default: 20 min game limit
         set(value) = prefs.edit().putInt(KEY_GAME_LIMIT_MINS, value).apply()
 
+    var isAutoRestrictGamesEnabled: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_RESTRICT_GAMES, true) // Default: ON so newly installed games are caught automatically
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_RESTRICT_GAMES, value).apply()
+
+    var lastPlayStoreInstallTimestamp: Long
+        get() = prefs.getLong(KEY_LAST_PLAY_INSTALL_TS, 0L)
+        set(value) = prefs.edit().putLong(KEY_LAST_PLAY_INSTALL_TS, value).apply()
+
     var restrictedApps: Set<String>
-        get() = prefs.getStringSet(KEY_RESTRICTED_APPS, emptySet()) ?: emptySet()
-        set(value) = prefs.edit().putStringSet(KEY_RESTRICTED_APPS, value).apply()
+        get() = (prefs.getStringSet(KEY_RESTRICTED_APPS, emptySet()) ?: emptySet()).toSet()
+        set(value) = prefs.edit().putStringSet(KEY_RESTRICTED_APPS, value.toSet()).apply()
+
+    var exemptedGames: Set<String>
+        get() = (prefs.getStringSet(KEY_EXEMPTED_GAMES, emptySet()) ?: emptySet()).toSet()
+        set(value) = prefs.edit().putStringSet(KEY_EXEMPTED_GAMES, value.toSet()).apply()
+
+    @Synchronized
+    fun toggleRestrictedApp(packageName: String): Boolean {
+        val currentRestricted = restrictedApps.toMutableSet()
+        val currentExempted = exemptedGames.toMutableSet()
+        val nowRestricted = if (currentRestricted.contains(packageName)) {
+            currentRestricted.remove(packageName)
+            currentExempted.add(packageName) // Parent explicitly exempted this app/game
+            false
+        } else {
+            currentRestricted.add(packageName)
+            currentExempted.remove(packageName)
+            true
+        }
+        prefs.edit()
+            .putStringSet(KEY_RESTRICTED_APPS, currentRestricted.toSet())
+            .putStringSet(KEY_EXEMPTED_GAMES, currentExempted.toSet())
+            .apply()
+        return nowRestricted
+    }
+
+    @Synchronized
+    fun autoRestrictGameIfEligible(packageName: String, isGame: Boolean): Boolean {
+        if (!isAutoRestrictGamesEnabled || !isGame) return false
+        val currentExempted = exemptedGames
+        if (currentExempted.contains(packageName)) return false
+
+        val currentRestricted = restrictedApps.toMutableSet()
+        if (currentRestricted.contains(packageName)) return false
+
+        currentRestricted.add(packageName)
+        prefs.edit().putStringSet(KEY_RESTRICTED_APPS, currentRestricted.toSet()).apply()
+        return true
+    }
+
+    @Synchronized
+    fun autoRestrictGamesBatch(gamePackages: Collection<String>): Int {
+        if (!isAutoRestrictGamesEnabled || gamePackages.isEmpty()) return 0
+        val currentExempted = exemptedGames
+        val currentRestricted = restrictedApps.toMutableSet()
+        var addedCount = 0
+        for (pkg in gamePackages) {
+            if (!currentExempted.contains(pkg) && currentRestricted.add(pkg)) {
+                addedCount++
+            }
+        }
+        if (addedCount > 0) {
+            prefs.edit().putStringSet(KEY_RESTRICTED_APPS, currentRestricted.toSet()).apply()
+        }
+        return addedCount
+    }
+
+    private fun parseUsageJson(): JSONObject {
+        val jsonStr = prefs.getString(KEY_APP_USAGE_SECONDS, "{}") ?: "{}"
+        return try {
+            JSONObject(jsonStr)
+        } catch (_: Exception) {
+            JSONObject()
+        }
+    }
 
     fun getAppUsageSeconds(packageName: String): Int {
-        checkDailyReset()
-        val jsonStr = prefs.getString(KEY_APP_USAGE_SECONDS, "{}") ?: "{}"
-        val json = JSONObject(jsonStr)
-        return json.optInt(packageName, 0)
+        synchronized(usageLock) {
+            checkDailyReset()
+            return parseUsageJson().optInt(packageName, 0)
+        }
     }
 
     fun addAppUsageSeconds(packageName: String, seconds: Int) {
-        checkDailyReset()
-        val jsonStr = prefs.getString(KEY_APP_USAGE_SECONDS, "{}") ?: "{}"
-        val json = JSONObject(jsonStr)
-        val current = json.optInt(packageName, 0)
-        json.put(packageName, current + seconds)
-        prefs.edit().putString(KEY_APP_USAGE_SECONDS, json.toString()).apply()
+        if (seconds <= 0) return
+        synchronized(usageLock) {
+            checkDailyReset()
+            val now = System.currentTimeMillis()
+            // Deduplicate dual-service ticks (AppMonitorForegroundService + DoomsAccessibilityService)
+            if (now - lastAppUsageIncrementTimestamp < 850L) {
+                return
+            }
+            lastAppUsageIncrementTimestamp = now
+            val json = parseUsageJson()
+            val current = json.optInt(packageName, 0)
+            json.put(packageName, current + seconds)
+            prefs.edit().putString(KEY_APP_USAGE_SECONDS, json.toString()).apply()
+        }
     }
 
     var blockedChannels: List<String>
@@ -164,14 +255,15 @@ class AppPreferences(context: Context) {
         }
 
     fun getTotalRestrictedAppsUsageSeconds(): Int {
-        checkDailyReset()
-        val jsonStr = prefs.getString(KEY_APP_USAGE_SECONDS, "{}") ?: "{}"
-        val json = JSONObject(jsonStr)
-        var total = 0
-        for (pkg in restrictedApps) {
-            total += json.optInt(pkg, 0)
+        synchronized(usageLock) {
+            checkDailyReset()
+            val json = parseUsageJson()
+            var total = 0
+            for (pkg in restrictedApps) {
+                total += json.optInt(pkg, 0)
+            }
+            return total
         }
-        return total
     }
 
     fun unlockYouTubeEmergency() {
@@ -180,7 +272,10 @@ class AppPreferences(context: Context) {
     }
 
     fun resetGamesUsageEmergency() {
-        prefs.edit().putString(KEY_APP_USAGE_SECONDS, "{}").apply()
+        synchronized(usageLock) {
+            lastAppUsageIncrementTimestamp = 0L
+            prefs.edit().putString(KEY_APP_USAGE_SECONDS, "{}").apply()
+        }
     }
 
     var isStudyZoneActive: Boolean

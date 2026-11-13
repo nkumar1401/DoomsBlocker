@@ -1805,4 +1805,200 @@ void main() {
       expect(screenContent, contains('SliderTheme'));
     });
   });
+
+  // =========================================================================
+  // SPEC 23: Automatic Newly-Installed Game Detection & Mode-Scoped Enforcement
+  // =========================================================================
+  group('SPEC 23: Auto-Restrict Newly Installed & Pre-Existing Games', () {
+    test('Newly installed and pre-existing CATEGORY_GAME apps auto-join restrictedApps when autoRestrictGames is ON', () {
+      bool autoRestrictGames = true;
+      final Set<String> restrictedApps = {};
+      final Set<String> exemptedGames = {};
+      const ignoredSystemPkgs = {'com.android.vending', 'com.android.settings', 'com.google.android.packageinstaller'};
+
+      bool autoRestrictIfEligible(String pkg, {required bool isGame}) {
+        if (!autoRestrictGames || !isGame || ignoredSystemPkgs.contains(pkg)) return false;
+        if (exemptedGames.contains(pkg) || restrictedApps.contains(pkg)) return false;
+        restrictedApps.add(pkg);
+        return true;
+      }
+
+      // Play Store itself and non-game utility remain untouched
+      expect(autoRestrictIfEligible('com.android.vending', isGame: false), isFalse);
+      expect(autoRestrictIfEligible('org.wikipedia', isGame: false), isFalse);
+
+      // Existing pre-installed game gets auto-restricted
+      expect(autoRestrictIfEligible('com.supercell.clashofclans', isGame: true), isTrue);
+      expect(restrictedApps.contains('com.supercell.clashofclans'), isTrue);
+
+      // Newly downloaded game via Play Store gets auto-restricted immediately
+      expect(autoRestrictIfEligible('com.kiloo.subwaysurf', isGame: true), isTrue);
+      expect(restrictedApps.contains('com.kiloo.subwaysurf'), isTrue);
+
+      // When disabled, new games are not auto-added
+      autoRestrictGames = false;
+      expect(autoRestrictIfEligible('com.mojang.minecraftpe', isGame: true), isFalse);
+      expect(restrictedApps.contains('com.mojang.minecraftpe'), isFalse);
+    });
+
+    test('Parent manual exemption prevents auto-re-addition until parent explicitly re-enables', () {
+      final Set<String> restrictedApps = {'com.chess', 'com.kiloo.subwaysurf'};
+      final Set<String> exemptedGames = {};
+      const autoRestrictGames = true;
+
+      void toggleRestricted(String pkg) {
+        if (restrictedApps.contains(pkg)) {
+          restrictedApps.remove(pkg);
+          exemptedGames.add(pkg);
+        } else {
+          restrictedApps.add(pkg);
+          exemptedGames.remove(pkg);
+        }
+      }
+
+      bool tryAutoRestrict(String pkg, {required bool isGame}) {
+        if (!autoRestrictGames || !isGame) return false;
+        if (exemptedGames.contains(pkg) || restrictedApps.contains(pkg)) return false;
+        restrictedApps.add(pkg);
+        return true;
+      }
+
+      // Parent unchecks Chess
+      toggleRestricted('com.chess');
+      expect(restrictedApps.contains('com.chess'), isFalse);
+      expect(exemptedGames.contains('com.chess'), isTrue);
+
+      // Background sync/launch must respect exemption and NOT re-add Chess
+      expect(tryAutoRestrict('com.chess', isGame: true), isFalse);
+      expect(restrictedApps.contains('com.chess'), isFalse);
+
+      // Parent manually checks Chess back ON -> exemption clears
+      toggleRestricted('com.chess');
+      expect(restrictedApps.contains('com.chess'), isTrue);
+      expect(exemptedGames.contains('com.chess'), isFalse);
+    });
+
+    test('Mode-scoped enforcement: Games only count/lock in Kids Mode & Study Zone, never in Adult Mode', () {
+      String? evaluateGameAccess({
+        required bool isKidsModeEnabled,
+        required bool isStudyZoneActive,
+        required bool isRestrictedOrDetectedGame,
+        required int totalUsedSeconds,
+        required int gameLimitMinutes,
+      }) {
+        final isGameEnforcementActive = isKidsModeEnabled || isStudyZoneActive;
+        if (!isGameEnforcementActive || !isRestrictedOrDetectedGame) {
+          return 'ALLOWED';
+        }
+        if (isStudyZoneActive) {
+          return 'REASON_STUDY_ZONE';
+        }
+        if (totalUsedSeconds >= gameLimitMinutes * 60) {
+          return 'REASON_GAME_LIMIT';
+        }
+        return 'COUNTING';
+      }
+
+      // Adult Mode (both OFF): parent plays unrestricted even with exhausted quota
+      expect(
+        evaluateGameAccess(
+          isKidsModeEnabled: false,
+          isStudyZoneActive: false,
+          isRestrictedOrDetectedGame: true,
+          totalUsedSeconds: 1800,
+          gameLimitMinutes: 20,
+        ),
+        equals('ALLOWED'),
+      );
+
+      // Kids Mode ON, child already spent 20 min on Game A -> downloads Game B -> immediate lockout!
+      expect(
+        evaluateGameAccess(
+          isKidsModeEnabled: true,
+          isStudyZoneActive: false,
+          isRestrictedOrDetectedGame: true,
+          totalUsedSeconds: 1200,
+          gameLimitMinutes: 20,
+        ),
+        equals('REASON_GAME_LIMIT'),
+      );
+
+      // Kids Mode ON, fresh day (0s used) -> newly installed game counts within shared limit
+      expect(
+        evaluateGameAccess(
+          isKidsModeEnabled: true,
+          isStudyZoneActive: false,
+          isRestrictedOrDetectedGame: true,
+          totalUsedSeconds: 0,
+          gameLimitMinutes: 20,
+        ),
+        equals('COUNTING'),
+      );
+
+      // Study Zone ON -> instant Study Zone lock even at 0s used
+      expect(
+        evaluateGameAccess(
+          isKidsModeEnabled: false,
+          isStudyZoneActive: true,
+          isRestrictedOrDetectedGame: true,
+          totalUsedSeconds: 0,
+          gameLimitMinutes: 20,
+        ),
+        equals('REASON_STUDY_ZONE'),
+      );
+    });
+
+    test('Verify Kotlin GameDetector, install receiver, mode-scoped guards, and Flutter UI/Bridge integration', () {
+      final detectorFile = File('android/app/src/main/kotlin/com/doomsblocker/app/GameDetector.kt');
+      expect(detectorFile.existsSync(), isTrue);
+      final detectorCode = detectorFile.readAsStringSync();
+      expect(detectorCode, contains('CATEGORY_GAME'));
+      expect(detectorCode, contains('FLAG_IS_GAME'));
+      expect(detectorCode, contains('syncAllInstalledGames'));
+      expect(detectorCode, contains('syncAndCheckRestricted'));
+      expect(detectorCode, contains('com.android.vending'));
+
+      final prefsFile = File('android/app/src/main/kotlin/com/doomsblocker/app/AppPreferences.kt');
+      final prefsCode = prefsFile.readAsStringSync();
+      expect(prefsCode, contains('KEY_EXEMPTED_GAMES'));
+      expect(prefsCode, contains('KEY_AUTO_RESTRICT_GAMES'));
+      expect(prefsCode, contains('toggleRestrictedApp'));
+      expect(prefsCode, contains('autoRestrictGameIfEligible'));
+
+      final fgFile = File('android/app/src/main/kotlin/com/doomsblocker/app/AppMonitorForegroundService.kt');
+      final fgCode = fgFile.readAsStringSync();
+      expect(fgCode, contains('Intent.ACTION_PACKAGE_ADDED'));
+      expect(fgCode, contains('ContextCompat.RECEIVER_EXPORTED'));
+      expect(fgCode, contains('prefs.isKidsModeEnabled || prefs.isStudyZoneActive'));
+      expect(fgCode, contains('GameDetector.syncAndCheckRestricted'));
+
+      final a11yFile = File('android/app/src/main/kotlin/com/doomsblocker/app/DoomsAccessibilityService.kt');
+      final a11yCode = a11yFile.readAsStringSync();
+      expect(a11yCode, contains('GameDetector.syncAllInstalledGames'));
+      expect(a11yCode, contains('GameDetector.syncAndCheckRestricted'));
+      expect(a11yCode, contains('prefs.isKidsModeEnabled || prefs.isStudyZoneActive'));
+
+      final mainFile = File('android/app/src/main/kotlin/com/doomsblocker/app/MainActivity.kt');
+      final mainCode = mainFile.readAsStringSync();
+      expect(mainCode, contains('"setAutoRestrictGames"'));
+      expect(mainCode, contains('"autoRestrictGames"'));
+      expect(mainCode, contains('"isExempted"'));
+      expect(mainCode, contains('prefs.toggleRestrictedApp'));
+
+      final bridgeFile = File('lib/services/native_bridge.dart');
+      expect(bridgeFile.readAsStringSync(), contains('setAutoRestrictGames'));
+
+      final dashboardModel = File('lib/models/dashboard_data.dart');
+      expect(dashboardModel.readAsStringSync(), contains('autoRestrictGames'));
+
+      final appModel = File('lib/models/installed_app_model.dart');
+      expect(appModel.readAsStringSync(), contains('isExempted'));
+
+      final uiFile = File('lib/screens/game_limits_screen.dart');
+      final uiCode = uiFile.readAsStringSync();
+      expect(uiCode, contains('Auto-Restrict New & Installed Games'));
+      expect(uiCode, contains('NativeBridge.setAutoRestrictGames'));
+      expect(uiCode, contains('ALLOWED'));
+    });
+  });
 }
